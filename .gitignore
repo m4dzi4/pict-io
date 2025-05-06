@@ -1,0 +1,19 @@
+# Backend
+/backend/node_modules
+/backend/package-lock.json
+
+# Frontend (Next.js)
+/frontend/node_modules
+/frontend/.next
+/frontend/out
+/frontend/.env.local
+/frontend/.env.development.local
+/frontend/.env.production.local
+/frontend/npm-debug.log*
+/frontend/yarn-debug.log*
+/frontend/yarn-error.log*
+
+# IDE / OS specific
+.vscode/
+.idea/
+*.DS_Store
