@@ -1,6 +1,9 @@
 # Backend
 /backend/node_modules
 /backend/package-lock.json
+/backend/generated/
+/backend/prisma/migrations
+/backend/.env
 
 # Frontend (Next.js)
 /frontend/node_modules
