@@ -14,7 +14,7 @@ export default function RootLayout({ children /*, session */ }) { // NextAuth pa
             <meta name="description" content="Real-time drawing and guessing game." />
         </head>
         <body>
-          <TopBar /> {/* Add the TopBar here */}
+          <TopBar /> {/* Include the TopBar component */}
           <main className="container mx-auto px-4 py-6 mt-4">
             {children}
           </main>

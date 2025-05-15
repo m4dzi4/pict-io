@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import io from 'socket.io-client';
 import { ReactSketchCanvas } from 'react-sketch-canvas';
 import { jwtDecode } from 'jwt-decode';
@@ -15,19 +15,16 @@ export default function GamePage() {
     const [strokeColor, setStrokeColor] = useState("#000000");
     const [canvasColor, setCanvasColor] = useState("#ffffff");
     
-    const [gameStatus, setGameStatus] = useState('waiting'); // 'waiting', 'playing', 'ended'
-    const [roundCount, setRoundCount] = useState(0); // current round
-    const [maxRounds, setMaxRounds] = useState(3); // max rounds
-    const [roundDuration, setRoundDuration] = useState(60);
+    const [gameStatus, setGameStatus] = useState('playing'); // 'waiting', 'playing', 'ended'
     const [canStartGame, setCanStartGame] = useState(false);
     const [chatInput, setChatInput] = useState('');
     const [chatMessages, setChatMessages] = useState([]);
     const [playersInRoom, setPlayersInRoom] = useState([]);
     const [currentSocketId, setCurrentSocketId] = useState(null); // Tracks socket connection status
 
+    const router = useRouter();
     const params = useParams();
     const queryParams = useSearchParams();
-    const router = useRouter();
 
     const [roomId, setRoomId] = useState(null);
     const [isDrawer, setIsDrawer] = useState(false);
@@ -56,10 +53,11 @@ export default function GamePage() {
 
         console.log("GamePage Effect 1: Setting up socket for roomId", rIdFromParams);
         // Disconnect previous socket if any (e.g. if params.roomId changes for a new room)
+
         if (socketRef.current) {
-            socketRef.current.disconnect();
+                socketRef.current.disconnect();
         }
-        
+
         const newSocket = io('http://localhost:4000');
         socketRef.current = newSocket;
 
@@ -76,7 +74,7 @@ export default function GamePage() {
         newSocket.on('game_started', () => {
             console.log("Game has started!");
             setGameStatus('playing');
-            
+
             // Only add one system message - don't add messages about the word here
             setChatMessages(prev => [...prev, {
                 user: 'System', 
@@ -86,21 +84,21 @@ export default function GamePage() {
         });
 
         newSocket.on('new_chat_message', (data) => {
-            setChatMessages((prevMessages) => [...prevMessages, data]);
-        });
-
+                setChatMessages((prevMessages) => [...prevMessages, data]);
+            });
+        
         newSocket.on('new_keyword_for_drawer', (data) => {
-            if (isDrawerRef.current) { 
-                console.log("Received word as drawer:", data.keyword);
-                setCurrentKeyword(data.keyword);
-            }
-        });
-
-        // Modified handler for keyword_guessed - end of a round, transition to next
-    newSocket.on('keyword_guessed', (data) => {
+                if (isDrawerRef.current) { 
+                    console.log("Received word as drawer:", data.keyword);
+                    setCurrentKeyword(data.keyword);
+                }
+            });
+        
+            // Modified handler for keyword_guessed - end of a round, transition to next
+        newSocket.on('keyword_guessed', (data) => {
             console.log("Word guessed, round ending:", data);
             setRoundCount(prev => prev + 1);
-            
+
             // Add only one chat message for keyword guessed
             setChatMessages(prevMessages => [
                 ...prevMessages, 
@@ -110,15 +108,15 @@ export default function GamePage() {
                     type: 'keyword_event' 
                 }
             ]);
-            
+
             // Reset the drawer's UI
             if (isDrawerRef.current && canvasRef.current) {
                 canvasRef.current.clearCanvas();
             }
-            
+
             // Briefly show "between rounds" status
             setGameStatus('between_rounds');
-            
+
             // After a delay, go back to playing state
             setTimeout(() => {
                 if (socketRef.current?.connected) {
@@ -126,7 +124,7 @@ export default function GamePage() {
                 }
             }, 3000);
         });
-        
+
         newSocket.on('drawing_data_broadcast', (data) => {
             if (!isDrawerRef.current && canvasRef.current) { // Use ref for current isDrawer status
                 canvasRef.current.clearCanvas();
@@ -137,16 +135,16 @@ export default function GamePage() {
         newSocket.on('game_update', (data) => {
             const thisClientIsNowDrawer = data.drawerId === socketRef.current?.id;
             const wasPreviouslyDrawer = isDrawerRef.current;
-            
+
             // Update isDrawer state based on game_update
             setIsDrawer(thisClientIsNowDrawer);
-            
+
             // Update players list
             setPlayersInRoom(data.players || []);
-            
+
             // Update canStartGame state
             setCanStartGame(thisClientIsNowDrawer && (data.players?.length >= 2) && gameStatus === 'waiting');
-            
+
             // Clear canvas and handle transitions when drawer changes
             if (thisClientIsNowDrawer !== wasPreviouslyDrawer) {
                 if (thisClientIsNowDrawer) {
@@ -158,7 +156,7 @@ export default function GamePage() {
                     if (canvasRef.current) canvasRef.current.clearCanvas();
                 }
             }
-            
+
             // Load existing drawings if we're a guesser
             if (data.drawingPaths && canvasRef.current && !thisClientIsNowDrawer) {
                 // Clear first, then load
@@ -166,7 +164,7 @@ export default function GamePage() {
                 canvasRef.current.loadPaths(data.drawingPaths);
             }
         });
-        
+
         newSocket.on('new_keyword_for_drawer', (data) => {
             if (isDrawerRef.current) { // Use ref for current isDrawer status
                 setCurrentKeyword(data.keyword);
@@ -415,125 +413,115 @@ export default function GamePage() {
         return <div className="flex justify-center items-center h-screen">Preparing game... Please wait.</div>;
     }
 
-    // Modify your return JSX to reflect game status
-return (
-    <div style={{ display: 'flex', height: 'calc(100vh - 60px)', padding: '10px', boxSizing: 'border-box', gap: '10px', backgroundColor: '#f0f0f0', marginTop: '5px' }}>
-        {/* Left Panel */}
-        <div style={{ flex: '2', display: 'flex', flexDirection: 'column', border: '1px solid #ccc', borderRadius: '4px', padding: '10px', backgroundColor: 'white', overflow: 'hidden' }}>
-            <div style={{ paddingBottom: '10px', marginBottom: '10px', borderBottom: '1px solid #ddd', textAlign: 'center' }}>
-                <h4 className="text-lg font-semibold">Room: {roomId}</h4>
-                
-                {/* Game status display */}
-                <div className="mb-2">
-                    {gameStatus === 'waiting' ? (
-                        <>
-                            <span className="bg-gray-100 px-2 py-1 rounded text-gray-700">Waiting for players</span>
-                            <div>
-                                {isRoomOwner && playersInRoom.length >= 2 && (
-                                    <button onClick={handleStartGame} className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Start Game</button>
-                                )}
-                                {isRoomOwner && playersInRoom.length < 2 && (
-                                    <span className="text-red-500">Need at least 2 players to start</span>
-                                )}
-                            </div>
-                        </>
-                    ) : (
-                        <span className="bg-yellow-100 px-2 py-1 rounded text-yellow-700">Round complete - next round starting...</span>
-                    )}
-                </div>
-                
-                {/* Player role and word display */}
-                {isDrawer ? (
+    // Boilerplate version of the UI, keeping all functionalities, buttons, and layout (2/3 canvas, 1/3 chat)
+    return (
+        <div style={{ display: 'flex', height: '100vh', gap: '8px', background: '#eee', padding: '8px', boxSizing: 'border-box' }}>
+            {/* Left: Canvas Area (2/3) */}
+            <div style={{ flex: 2, display: 'flex', flexDirection: 'column', background: '#fff', border: '1px solid #ccc', borderRadius: 4, padding: 8, minWidth: 0 }}>
+                {/* Room and Status */}
+                <div style={{ marginBottom: 8 }}>
+                    <div>Room: {roomId}</div>
                     <div>
-                        <p style={{color: 'green', fontWeight: 'bold'}}>You are the Drawer!</p>
-                        {gameStatus === 'waiting' ? (
-                            <p>Waiting for game to start...</p>
-                        ) : gameStatus === 'between_rounds' ? (
-                            <p>Get ready to draw a new word...</p>
-                        ) : currentKeyword ? (
-                            <p>Your word: <strong className="text-xl">{currentKeyword}</strong></p>
-                        ) : (
-                            <p>Waiting for a word...</p>
+                        {gameStatus === 'waiting' && (<span>Wait for game start.</span>)}
+                    </div>
+                    <div>
+                        {isRoomOwner && playersInRoom.length >= 2 && canStartGame && (
+                            <button onClick={handleStartGame}>Start Game</button>
                         )}
                     </div>
-                ) : (
-                    <p style={{color: 'blue', fontWeight: 'bold'}}>
-                        You are Guessing! 
-                        {gameStatus === 'waiting' ? ' Waiting for game to start...' : 
-                        gameStatus === 'between_rounds' ? ' New round starting soon...' : 
-                        ' Try to guess what is being drawn!'}
-                    </p>
-                )}
-                
-                {/* Player list */}
-                <div className="text-sm text-gray-600 mt-1">
-                    Players: {playersInRoom.join(', ')} {playersInRoom.length < 2 ? '(Need at least 2 players to start)' : ''}
+                    <div>
+                        {isDrawer ? (
+                            <div>
+                                <div>You are the Drawer!</div>
+                                {gameStatus === 'waiting' && <div>Waiting for game to start...</div>}
+                                {gameStatus === 'between_rounds' && <div>Get ready to draw a new word...</div>}
+                                {gameStatus === 'playing' && currentKeyword && <div>Your word: <b>{currentKeyword}</b></div>}
+                                {gameStatus === 'playing' && !currentKeyword && <div>Waiting for a word...</div>}
+                            </div>
+                        ) : (
+                            <div>
+                                You are Guessing!
+                                {gameStatus === 'between_rounds' && ' New round starting soon...'}
+                                {gameStatus === 'playing' && ' Try to guess what is being drawn!'}
+                            </div>
+                        )}
+                    </div>
+                    <div>
+                        Players: {playersInRoom.join(', ')} {playersInRoom.length < 2 ? '(Need at least 2 players to start)' : ''}
+                    </div>
                 </div>
-            </div>
-
+                {/* Drawing Tools */}
                 {isDrawer && (
-                    <div style={{ paddingBottom: '10px', marginBottom: '10px', borderBottom: '1px solid #ddd', display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center', justifyContent: 'center' }}>
-                        <button onClick={handlePenClick} disabled={!eraseMode || !isDrawer} className="px-3 py-1 border rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-50">Pen</button>
-                        <button onClick={handleEraserClick} disabled={eraseMode || !isDrawer} className="px-3 py-1 border rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-50">Eraser</button>
-                        <label htmlFor="strokeColor" className="text-sm">Color:</label>
-                        <input type="color" id="strokeColor" value={strokeColor} onChange={handleStrokeColorChange} disabled={!isDrawer} style={{width: '30px', height: '30px', border: 'none', padding: 0, borderRadius: '4px'}}/>
-                        <label htmlFor="strokeWidth" className="text-sm">Size:</label>
-                        <input type="range" id="strokeWidth" min="1" max="50" value={eraseMode ? eraserWidth : strokeWidth} onChange={eraseMode ? handleEraserWidthChange : handleStrokeWidthChange} disabled={!isDrawer} className="w-24"/>
-                        <button onClick={handleUndoClick} disabled={!isDrawer} className="px-3 py-1 border rounded bg-gray-200 hover:bg-gray-300">Undo</button>
-                        <button onClick={handleRedoClick} disabled={!isDrawer} className="px-3 py-1 border rounded bg-gray-200 hover:bg-gray-300">Redo</button>
-                        <button onClick={handleClearClick} disabled={!isDrawer} className="px-3 py-1 border rounded bg-red-500 text-white hover:bg-red-600">Clear</button>
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+                        <button onClick={handlePenClick} disabled={!eraseMode || !isDrawer}>Pen</button>
+                        <button onClick={handleEraserClick} disabled={eraseMode || !isDrawer}>Eraser</button>
+                        <label>
+                            Color:
+                            <input type="color" value={strokeColor} onChange={handleStrokeColorChange} disabled={!isDrawer} />
+                        </label>
+                        <label>
+                            Size:
+                            <input
+                                type="range"
+                                min="1"
+                                max="50"
+                                value={eraseMode ? eraserWidth : strokeWidth}
+                                onChange={eraseMode ? handleEraserWidthChange : handleStrokeWidthChange}
+                                disabled={!isDrawer}
+                            />
+                        </label>
+                        <button onClick={handleUndoClick} disabled={!isDrawer}>Undo</button>
+                        <button onClick={handleRedoClick} disabled={!isDrawer}>Redo</button>
+                        <button onClick={handleClearClick} disabled={!isDrawer}>Clear</button>
                     </div>
                 )}
-                
-                <div style={{ flexGrow: 1, position: 'relative', border: '1px solid #ddd', borderRadius: '4px', overflow: 'hidden' }}>
+                {/* Canvas */}
+                <div style={{ flex: 1, minHeight: 0, position: 'relative', border: '1px solid #ddd', borderRadius: 4, overflow: 'hidden' }}>
                     <ReactSketchCanvas
                         ref={canvasRef}
                         strokeWidth={eraseMode ? eraserWidth : strokeWidth}
                         eraserWidth={eraserWidth}
                         strokeColor={strokeColor}
                         canvasColor={canvasColor}
-                        height="100%" 
+                        height="100%"
                         width="100%"
                         readOnly={effectiveReadOnly}
                         onChange={handleCanvasChange}
-                        style={{ border: 'none' }}
+                        style={{ border: 'none', width: '100%', height: '100%' }}
                     />
                     {!isDrawer && (
-                        <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 10, cursor: 'not-allowed' }} title="View only mode"></div>
+                        <div style={{ position: 'absolute', inset: 0, zIndex: 10, cursor: 'not-allowed' }} />
                     )}
                 </div>
             </div>
-
-            {/* Right Panel - Chat Area */}
-            <div style={{ flex: '1', border: '1px solid #ccc', borderRadius: '4px', display: 'flex', flexDirection: 'column', padding: '10px', backgroundColor: 'white', overflow: 'hidden' }}>
-                <h3 style={{ textAlign: 'center', marginBottom: '10px', paddingBottom: '10px', borderBottom: '1px solid #ddd', fontSize: '1.1rem', fontWeight: 'semibold' }}>Chat & Guesses</h3>
-                <div style={{ flexGrow: 1, overflowY: 'auto', marginBottom: '10px', paddingRight: '5px' }}>
-                    {chatMessages.map((msg, index) => (
-                        <div 
-                            key={index} 
-                            style={{ 
-                                marginBottom: '8px', padding: '6px 10px', borderRadius: '6px',
-                                backgroundColor: msg.user === 'System' ? (msg.type === 'keyword_event' ? '#e6fffa' : '#e9ecef') : (msg.user === loggedInUser?.username ? '#d1e7dd' : '#f8f9fa'),
-                                color: msg.user === 'System' ? (msg.type === 'keyword_event' ? '#155724' : '#495057') : '#212529',
-                                borderLeft: msg.user === 'System' ? '3px solid #6c757d' : (msg.user === loggedInUser?.username ? '3px solid #198754' : '3px solid #ced4da'),
-                                wordBreak: 'break-word'
-                            }}
-                        >
-                            <strong style={{fontSize: '0.9em', color: '#343a40', marginRight: '5px'}}>{msg.user === loggedInUser?.username && msg.user !== 'System' ? 'You' : msg.user}:</strong>
-                            {msg.text}
+            {/* Right: Chat Area (1/3) */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#fff', border: '1px solid #ccc', borderRadius: 4, padding: 8, minWidth: 0 }}>
+                <div style={{ marginBottom: 8 }}>Chat & Guesses</div>
+                <div style={{ flex: 1, overflowY: 'auto', marginBottom: 8 }}>
+                    {chatMessages.map((msg, idx) => (
+                        <div key={idx} style={{
+                            marginBottom: 4,
+                            padding: 4,
+                            borderRadius: 4,
+                            background: msg.user === 'System'
+                                ? (msg.type === 'keyword_event' ? '#e6fffa' : '#eee')
+                                : (msg.user === loggedInUser?.username ? '#e0ffe0' : '#f8f8f8'),
+                            fontWeight: msg.user === 'System' ? 'bold' : 'normal'
+                        }}>
+                            <span>{msg.user === loggedInUser?.username && msg.user !== 'System' ? 'You' : msg.user}:</span> {msg.text}
                         </div>
                     ))}
                 </div>
-                <form onSubmit={handleSendChatMessage} style={{ display: 'flex', gap: '5px', marginTop: 'auto' }}>
+                <form onSubmit={handleSendChatMessage} style={{ display: 'flex', gap: 4 }}>
                     <input
                         type="text"
                         value={chatInput}
-                        onChange={(e) => setChatInput(e.target.value)}
+                        onChange={e => setChatInput(e.target.value)}
                         placeholder={isDrawer ? "You are drawing, can't guess!" : "Type your guess or chat..."}
-                        style={{ flexGrow: 1, padding: '10px', borderRadius: '4px', border: '1px solid #ccc' }}
                         disabled={isDrawer}
+                        style={{ flex: 1, padding: 6, borderRadius: 4, border: '1px solid #ccc' }}
                     />
-                    <button type="submit" disabled={isDrawer} className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50">Send</button>
+                    <button type="submit" disabled={isDrawer}>Send</button>
                 </form>
             </div>
         </div>
