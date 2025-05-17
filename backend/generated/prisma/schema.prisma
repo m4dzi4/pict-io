@@ -1,0 +1,49 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String @id @default(cuid()) // Primary Key, unique CUID
+  username       String @unique // Unique username for login
+  hashedPassword String // Store the hashed password
+
+  // Add the relation to Room model - this user can own multiple rooms
+  roomsOwned Room[]   @relation("RoomOwner")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Room {
+  id         String  @id @default(cuid()) // Primary Key, unique CUID
+  roomId     String  @unique // Your human-readable, unique room ID (e.g., "ABC123")
+  maxPlayers Int     @default(8)
+  accessCode String? // Optional: for private rooms
+
+  ownerId String
+  owner   User   @relation("RoomOwner", fields: [ownerId], references: [id]) // Foreign key to User
+
+  // Game settings
+  gameMode      String @default("rounds") // "rounds" or "points"
+  maxRounds     Int    @default(5) // Maximum number of rounds in a game
+  pointsToWin   Int    @default(3) // Points needed to win in points mode
+  roundDuration Int    @default(60) // Time limit per round in seconds
+  drawerChoice  String @default("random") // Choice for choosing the drawer
+
+  // Game state (optional - could also be kept only in memory)
+  status String @default("waiting") // "waiting", "playing", "ended"
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
