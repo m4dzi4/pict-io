@@ -15,7 +15,7 @@ export default function HomePage() {
   const [newRoomSettings, setNewRoomSettings] = useState({
       maxPlayers: 8,
       isPrivate: false,
-      accessCode: '',
+      accessCode: '', //new comment
       gameMode: 'rounds',    // 'rounds' or 'points'
       maxRounds: 5,          // Default 5 rounds
       pointsToWin: 3,        // Default 3 points to win (for points mode)
