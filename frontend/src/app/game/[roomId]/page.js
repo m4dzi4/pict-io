@@ -6,6 +6,9 @@ import { ReactSketchCanvas } from 'react-sketch-canvas';
 import { jwtDecode } from 'jwt-decode';
 
 export default function GamePage() {
+
+    // TODO: Change logic to rely on the game object in memory.
+    game = {}
     // define state variables
     const canvasRef = useRef(null);
     const socketRef = useRef(null);
