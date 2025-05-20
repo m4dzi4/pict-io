@@ -22,7 +22,7 @@ const io = new Server(server, {
 const JWT_SECRET = process.env.JWT_SECRET
 // TODO: should be handled as a call to the database
 const KEYWORDS_LIST = ["apple", "banana", "car", "house", "tree", "sun", "moon", "star", "book", "clock", "river", "mountain", "bridge", "flower", "fish"];
-let games = {};
+let games = {}; // roomID : game object
 
 async function generateRoomId() {
   let newRoomId;
@@ -168,7 +168,6 @@ app.post('/api/rooms/create', authenticateToken, async (req, res) => {
 
   try {
     const roomId = await generateRoomId();
-    const keyword = getRandomKeyword();
     
     const dbRoom = await prisma.room.create({
       data: {
@@ -186,28 +185,30 @@ app.post('/api/rooms/create', authenticateToken, async (req, res) => {
     console.log(`Room ${dbRoom.roomId} created in DB by ${creatorUsername}.`);
 
     // Initialize in-memory game state. The creator will join via Socket.IO on game page.
-    games[dbRoom.roomId] = {
-      id: dbRoom.roomId,
-      dbId: dbRoom.id,
+    games[roomId] = {
+      // Creation data
+      roomId: roomId,
       ownerId: creatorDbId,
+      ownerUsername: creatorUsername,
+      // Game settings
       maxPlayers: dbRoom.maxPlayers,
       accessCode: dbRoom.accessCode,
-      // Game settings
       gameMode: dbRoom.gameMode,
       maxRounds: dbRoom.maxRounds,
       pointsToWin: dbRoom.pointsToWin,
       roundDuration: dbRoom.roundDuration,
       drawerChoice: dbRoom.drawerChoice,
+      // Game state
       drawerId: null,
       keyword: null,
       drawingPaths: [],
-      players: [],
+      players: [], // (socket)Id, username, dbUserId 
       round_history: {
         // 1: {
         //   drawerId: null,
         //   keyword: null,
         //   correct_guesses: [],
-        //   all_guesses: {}
+        //   all_guesses: {} // { playerId: guess }
         // }
       },
       scores: {},  // Player scores: { playerId: score }
@@ -290,11 +291,7 @@ io.on("connection", (socket) => {
             const player = userIdExists
             socket.join(roomId);
             console.log(`User ${player.username} (Socket: ${socket.id}) re-confirmed in room ${roomId}.`);
-            callback({ success: true, roomId, drawingPaths: game.drawingPaths });
-            socket.emit('game_update', { drawerId: game.drawerId, drawingPaths: game.drawingPaths, players: game.players.map(p=>p.username) });
-            if (player.id === game.drawerId) {
-                socket.emit('new_keyword_for_drawer', { keyword: game.keyword });
-            }
+            callback({ success: true, game: games[roomId] });
             return;
         }
 
@@ -304,7 +301,7 @@ io.on("connection", (socket) => {
 
         const newPlayer = { 
             id: socket.id, 
-            username: joiningUsername, 
+            username: joiningUsername,
             dbUserId: joiningUserId
         };
         game.players.push(newPlayer);
@@ -312,22 +309,13 @@ io.on("connection", (socket) => {
         socket.join(roomId);
         console.log(`User ${socket.id} (username: ${joiningUsername}) joined room ${roomId}.`);
 
-        callback({ success: true, roomId, drawingPaths: game.drawingPaths, isRoomOwner: isOwner,
-          gameSettings: {
-            gameMode: game.gameMode,
-            maxRounds: game.maxRounds,
-            pointsToWin: game.pointsToWin,
-            roundDuration: game.roundDuration,
-            currentRound: game.currentRound
-          }
-         });
-
-        io.to(roomId).emit('game_update', { drawerId: game.drawerId, drawingPaths: game.drawingPaths, players: game.players.map(p=>p.username) });
+        callback({ success: true, game: games[roomId]});
         
         socket.broadcast.to(roomId).emit('new_chat_message', {
           user: 'System',
           text: `${joiningUsername} has joined the room.`
         });
+        socket.broadcast.to(roomId).emit('update_game', { players: game.players, drawerId: game.drawerId, drawingPaths: game.drawingPaths});
 
     } catch (error) {
         console.error(`Error in socket join_room for room ${roomId}:`, error);
@@ -411,7 +399,6 @@ io.on("connection", (socket) => {
 
   socket.on('end_game', ({ roomId }) => {
   });
-
 
   socket.on('start_game', ({ roomId }) => {
       console.log(`Received start_game request from ${socket.id} for room ${roomId}`);
