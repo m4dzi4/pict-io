@@ -5,6 +5,8 @@ const { Server } = require('socket.io');
 const { PrismaClient } = require('./generated/prisma');
 const bcrypt = require('bcryptjs'); // Import bcryptjs
 const jwt = require('jsonwebtoken'); // Import jsonwebtoken
+const { realpathSync } = require('fs');
+const { send } = require('process');
 
 const app = express();
 app.use(cors());
@@ -18,6 +20,26 @@ const io = new Server(server, {
     methods: ["GET", "POST"]
   }
 });
+
+// TODO : Fix the logic where during the downtime between the rounds, the previous drawer can draw still.
+// TODO : Fix the the logic where if the person guessing is not a guest, the guess is not sent properly.
+// TODO : Add the logic for game end and the statistics display. Also send the statistics to the database.
+// TODO : Add the logic for the game round history to be saved in the database.
+// TODO : Change the keywords to be stored in the database and not hardcoded.
+// TODO : Add logic for only one person being in the room - check if only one person, notify them, give them some time to leave, or others to join and then delete the room
+// TODO : Fix logic, where if the game ends, the game is deleted from the database and memory, as well as remove all sockets from the room.
+// TODO : Change logic to use only the database for the rooms and not the memory ???
+// TODO : Fix private room logic - fix the acccess code logic.
+// TODO : Add leaderboard logic - add the leaderboard to the database and show it in the game.
+// TODO : Fix room creation logic - check all options are working correctly.
+// TODO : Add logged in user statistics display + retrieval from the database.
+// TODO : Add a leave room / game button - remove the user from the room / game and update the database.
+// TODO : Add a destroy room button - remove the room from the database and memory and removes all sockets from the room.
+// TODO : Add a join from a list of rooms - show the list of rooms and allow the user to join a room.
+// TODO : Add SSO
+// TODO : Add a way to change the username / password, etc. - add a way to change this in the database.
+// TODO : Add frontend beuty
+// TODO : Dockerize the app
 
 const JWT_SECRET = process.env.JWT_SECRET
 // TODO: should be handled as a call to the database
@@ -42,23 +64,30 @@ function getRandomKeyword() {
 }
 
 function getDrawer(roomId) {
+  // TODO : What if the player is no longer in the game - check for validity.
   const game = games[roomId];
-  if (game.drawerChoice === 'queue') {
-    // The player that is at the start of the queue is selected as the drawer
-    if (game.drawerQueue.length === 0) return;
-    const firstPlayer = game.drawerQueue[0];
-    game.drawerQueue.shift(); // Remove the first player from the queue
-    return firstPlayer.id;
-  } else if (game.drawerChoice === 'winner') {
-    // The player that guessed first in the last round becomes the drawer
-    // round_history: {}, // { roundNumber: { drawerId, keyword, correct_guesses in order [player1, player2, player3], all_guesses {} } }
-    const lastRound = game.round_history[game.currentRound - 1];
-    if (!lastRound || !lastRound.correct_guesses || lastRound.correct_guesses.length === 0) return;
-    const firstGuesserId = lastRound.correct_guesses[0];
-    return firstGuesserId;
+  if (game.currentRound === 1) { // First round, drawer is the owner
+    const ownerPlayer = game.players.find(p => p.dbUserId === game.ownerId);
+    return ownerPlayer ? ownerPlayer.id : null;
+  } else {
+    if (game.drawerChoice === 'queue') {
+      // The player that is at the start of the queue is selected as the drawer
+      if (game.drawerQueue.length === 0) return;
+      const firstPlayer = game.drawerQueue[0];
+      game.drawerQueue.shift(); // Remove the first player from the queue
+      return firstPlayer.id;
+    } else if (game.drawerChoice === 'winner') {
+      // The player that guessed first in the last round becomes the drawer
+      // round_history: {}, // { roundNumber: { drawerId, keyword, correct_guesses in order [player1, player2, player3], all_guesses {} } }
+      const lastRound = game.round_history[game.currentRound - 1];
+      if (!lastRound || !lastRound.correct_guesses || lastRound.correct_guesses.length === 0) return;
+      const firstGuesserId = lastRound.correct_guesses[0];
+      return firstGuesserId;
+    } else { // else random
+      const randomIndex = Math.floor(Math.random() * game.players.length);
+      return game.players[randomIndex].id;
+    }  
   }
-  const randomIndex = Math.floor(Math.random() * game.players.length);
-  return game.players[randomIndex].id;
 }
 
 // Helper function to mark a room as inactive in the database
@@ -253,12 +282,38 @@ app.get('/api/rooms/validate/:roomId', async (req, res) => {
   }
 });
 
+function getPublicGameState(game) {
+    return {
+        roomId: game.roomId,
+        ownerId: game.ownerId,
+        ownerUsername: game.ownerUsername,
+        maxPlayers: game.maxPlayers,
+        accessCode: game.accessCode,
+        gameMode: game.gameMode,
+        maxRounds: game.maxRounds,
+        pointsToWin: game.pointsToWin,
+        roundDuration: game.roundDuration,
+        drawerChoice: game.drawerChoice,
+        drawerId: game.drawerId,
+        keyword: null, // never send the keyword to all clients!
+        drawingPaths: game.drawingPaths,
+        players: game.players.map(p => ({
+            id: p.id,
+            username: p.username,
+            dbUserId: p.dbUserId
+        })),
+        scores: game.scores,
+        currentRound: game.currentRound,
+        gameStatus: game.gameStatus
+    };
+}
 
 // Socket.IO connection
 io.on("connection", (socket) => {
   console.log("Socket connected:", socket.id);
 
   socket.on('join_room', async ({ roomId, token, accessCode: providedAccessCode }, callback) => {
+    socket.roomId = roomId;
     let joiningUsername = `Guest-${socket.id.substring(0,4)}`;
     let joiningUserId = null;
     let isAuthenticated = false;
@@ -276,6 +331,7 @@ io.on("connection", (socket) => {
 
     try {
         const game = games[roomId];
+        const publicGameState = getPublicGameState(game);
         if (!game) {
           return callback({ success: false, message: 'Game session not found or not active.' });
         }
@@ -283,15 +339,24 @@ io.on("connection", (socket) => {
         if (game.accessCode && game.accessCode !== providedAccessCode) {
             return callback({ success: false, message: 'Invalid access code for private room.' });
         }
+
+        if (game.gameStatus === 'playing') {
+          publicGameState.currentRound = game.currentRound;
+          publicGameState.maxRounds = game.maxRounds;
+          publicGameState.drawerId = game.drawerId;
+          publicGameState.drawingPaths = game.drawingPaths;
+          publicGameState.roundEndTime = game.roundEndTime;
+          publicGameState.gameStatus = game.gameStatus;
+          // Do NOT send the keyword!
+        }
         
         let userIdExists = isAuthenticated ? game.players.find(p => p.dbUserId === joiningUserId) : game.players.find(p => p.id === socket.id);
-        let isOwner = isAuthenticated && joiningUserId === game.ownerId;
 
         if (userIdExists) {
             const player = userIdExists
             socket.join(roomId);
             console.log(`User ${player.username} (Socket: ${socket.id}) re-confirmed in room ${roomId}.`);
-            callback({ success: true, game: games[roomId] });
+            callback({ success: true, game: publicGameState });
             return;
         }
 
@@ -309,13 +374,13 @@ io.on("connection", (socket) => {
         socket.join(roomId);
         console.log(`User ${socket.id} (username: ${joiningUsername}) joined room ${roomId}.`);
 
-        callback({ success: true, game: games[roomId]});
+        callback({ success: true, game: publicGameState});
         
-        socket.broadcast.to(roomId).emit('new_chat_message', {
-          user: 'System',
-          text: `${joiningUsername} has joined the room.`
-        });
         socket.broadcast.to(roomId).emit('update_game', { players: game.players, drawerId: game.drawerId, drawingPaths: game.drawingPaths});
+        io.to(roomId).emit('new_chat_message', { 
+          user: 'System', 
+          text: `${newPlayer.username} has connected.` 
+        });
 
     } catch (error) {
         console.error(`Error in socket join_room for room ${roomId}:`, error);
@@ -361,126 +426,176 @@ io.on("connection", (socket) => {
         // Correct guess logic
         game.round_history[game.currentRound].correct_guesses.push(senderId);
         game.round_history[game.currentRound].all_guesses[senderId] = text;
-        correct_guess(senderId);
+        correct_guess(roomId, senderId);
       } else {
         game.round_history[game.currentRound].all_guesses[senderId] = text;
+        io.to(roomId).emit('new_chat_message', messageData);
       }
+    } else {
+      io.to(roomId).emit('new_chat_message', messageData);
     }
-    
-    io.to(roomId).emit('new_chat_message', messageData);
   });
 
-  // If the guess is correct, update the game state and notify players
-  function correct_guess(senderId) {
-      const game = games[roomId];
-      
-      // Send a special message only visible to the guesser that they were correct
-      socket.emit('new_chat_message', { 
-        user: 'System', 
-        text: `Correct! You guessed the word: ${game.keyword}!`,
-        type: 'correct_guess'
-      });
-      // Update the scores
-      game.scores[senderId] = (game.scores[senderId]) + 1;  
+  function endRound(roomId, reason = "timer", senderId) {
+    const game = games[roomId];
+    if (!game) return;
+
+    // Clear the round timer if it exists
+    if (game.roundTimer) {
+        clearTimeout(game.roundTimer);
+        game.roundTimer = null;
+    }
+
+    io.to(roomId).emit('new_chat_message', { 
+          user: 'System', 
+          text: `Round ${game.currentRound} ended! Reason : ${reason}. The word was "${game.keyword}". New round starting soon...` 
+    });
+    
+    io.to(roomId).emit('end_round', {
+      gameStatus: 'betweenRounds'
+    });
+
+    // Check if game should end
+    if (game.gameMode === 'rounds' && game.currentRound >= (game.maxRounds)) {
+        endGame(roomId, currentRound);
+    } else {
+      // Start next round after a short delay (e.g., 3 seconds)
+        setTimeout(() => startNewRound(roomId), 3000);
+    }
   }
 
-  socket.on('new_round', ({ roomId }) => {
+  // If the guess is correct, update the game state and notify players
+  function correct_guess(roomId, senderId) {
       const game = games[roomId];
-      game.drawingPaths = [];
-      game.currentRound += 1;
-      game.round_history[game.currentRound] = {drawerId: game.drawerId, keyword: game.keyword, correct_guesses: [], all_guesses: {}};
-      game.drawerId = getDrawer(roomId);
-      game.keyword = getRandomKeyword();
-      // Notify all players about the new round
-  });
+      const guesser = game.players.find(p => p.id === senderId);
+      // Update the scores
+      game.scores[senderId] = (game.scores[senderId]) + 1;  
 
-  socket.on('end_round', ({ roomId }) => {
-  });
+      // 1. Special message only to the guesser
+      io.to(senderId).emit('new_chat_message', { 
+          user: 'System', 
+          text: `Correct! You guessed the word: ${game.keyword}!`,
+          type: 'correct_guess'
+      });
+
+      // 2. Notify all others (including drawer)
+      socket.broadcast.to(roomId).emit('new_chat_message', { 
+          user: 'System', 
+          text: `${guesser ? guesser.username : 'Someone'} has guessed the word!`,
+          type: 'other_correct'
+      });
+
+      // 3. Update guessed to disable chat for the guesser
+      io.to(senderId).emit('update_guessed');
+
+      // 4, Check if that means end of the game
+      if (game.gameMode === 'points' && game.scores[senderId] >= (game.pointsToWin)) {
+          endGame(roomId, senderId);
+      }
+
+      // 4. Check if all guessers have guessed correctly
+      const allGuessers = game.players.filter(p => p.id !== game.drawerId);
+      const correctGuessers = game.round_history[game.currentRound].correct_guesses;
+      console.log(`All guessers: ${allGuessers.map(p => p.username).join(', ')}`);
+      console.log(`Correct guessers: ${correctGuessers.map(p => p.username).join(', ')}`);
+      console.log(`drawerId: ${game.drawerId}`);
+      if (allGuessers.length > 0 && allGuessers.every(p => correctGuessers.includes(p.id))) {
+          endRound(roomId, "all_guessed");
+      }
+  }
+
+  function startNewRound(roomId) {
+    const game = games[roomId];
+    game.drawingPaths = [];
+    game.currentRound += 1;
+    game.drawerId = getDrawer(roomId);
+    game.keyword = getRandomKeyword();
+    console.log(`Starting new round ${game.currentRound} in room ${roomId}. Drawer: ${game.drawerId}, Keyword: ${game.keyword}`);
+    game.round_history[game.currentRound] = {drawerId: game.drawerId, keyword: game.keyword, correct_guesses: [], all_guesses: {}};
+    // Set round end time
+    const roundDurationMs = (game.roundDuration) * 1000;
+    game.roundEndTime = Date.now() + roundDurationMs;
+
+    if (game.roundTimer) clearTimeout(game.roundTimer);
+    game.roundTimer = setTimeout(() => endRound(roomId), roundDurationMs);
+
+    // Emit new_round with roundEndTime
+    io.to(roomId).emit('new_round', {
+        drawingPaths: [],
+        currentRound: game.currentRound,
+        maxRounds: game.maxRounds,
+        drawerId: game.drawerId,
+        currentRound: game.currentRound,
+        roundEndTime: game.roundEndTime, // <--- Only sent here!
+        gameStatus: 'playing'
+    });
+
+    io.to(game.drawerId).emit('new_keyword', { keyword: game.keyword });
+}
 
   socket.on('end_game', ({ roomId }) => {
   });
 
-  socket.on('start_game', ({ roomId }) => {
-      console.log(`Received start_game request from ${socket.id} for room ${roomId}`);
+  socket.on('start_game', ({ roomId }, callback) => {
       const game = games[roomId];
-      if (!game) {
-          console.warn(`Start game requested for non-existent room ${roomId}`);
-          return;
-      }
-      // Check if we have enough players
-      if (game.players.length < 2) {
-          console.warn(`Not enough players to start game in room ${roomId}`);
-          return;
-      }
-
       game.gameStatus = 'playing';
-      // Initialize the first round
-      socket.emit('new_round', { roomId });
-
+      game.currentRound = 0;
+      startNewRound(roomId);
       // Notify everyone that the game is starting
       io.to(roomId).emit('game_started');
-
-      // Then, send the keyword only to the drawer (separating these events prevents duplication)
-      setTimeout(() => {
-          io.to(game.drawerId).emit('new_keyword_for_drawer', { keyword: game.keyword });
-      }, 500); // Small delay to ensure proper ordering of events
+      callback({ gameStatus: 'playing'})
   });
 
-  socket.on("disconnect", () => {
-  console.log("Socket disconnected:", socket.id);
-  
-  for (const roomId in games) {
+async function disconnectRoomSockets(roomId) {
+    const sockets = await io.in(roomId).fetchSockets();
+    sockets.forEach(socket => {
+        console.log(`Disconnecting socket ${socket.id} from room ${roomId}`);
+        socket.disconnect(true);
+    });
+}
+
+socket.on("disconnect", async () => {
+    console.log("Socket disconnected:", socket.id);
+    roomId = socket.roomId;
     const game = games[roomId];
+    if (!game) {
+        console.warn(`No game found for room ${roomId}.`);
+        return;
+    }
     const playerIndex = game.players.findIndex(p => p.id === socket.id);
-    
-    if (playerIndex !== -1) {
-      const removedPlayer = game.players.splice(playerIndex, 1)[0];
-      console.log(`User ${removedPlayer.username} (Socket: ${socket.id}) removed from room ${roomId}`);
-      
-      io.to(roomId).emit('new_chat_message', { 
+    const removedPlayer = game.players.splice(playerIndex, 1)[0];
+    io.to(roomId).emit('new_chat_message', { 
         user: 'System', 
         text: `${removedPlayer.username} has disconnected.` 
-      });
+    });
+    io.to(roomId).emit('update_game', { players: game.players, drawerId: game.drawerId, drawingPaths: game.drawingPaths });
+    if (game.players.length === 0) {
+      console.log(`Room ${roomId} is empty. Cleaning up from database and memory.`);
       
-      io.to(roomId).emit('game_update', { drawerId: game.drawerId, drawingPaths: game.drawingPaths, players: game.players.map(p=>p.username) });
-
-      if (game.players.length === 0) {
-        console.log(`Room ${roomId} is empty. Cleaning up from database and memory.`);
-        
-        // Mark room as inactive in database
-        markRoomInactive(roomId)
-          .then(() => console.log(`Room ${roomId} marked as inactive in database`))
-          .catch(err => console.error(`Error marking room ${roomId} as inactive:`, err));
-        
-        // Remove from memory
-        delete games[roomId];
-      } else if (removedPlayer.id === game.drawerId) { 
-          // Drawer disconnected, assign a new drawer
-          game.players[0].isDrawer = true;
-          game.drawerId = game.players[0].id;
-          game.keyword = getRandomKeyword();
-          game.drawingPaths = [];
-          
-          io.to(roomId).emit('game_update', { 
-            drawerId: game.drawerId,
-            drawingPaths: [], 
-            players: game.players.map(p=>p.username)
-          });
-          io.to(game.drawerId).emit('new_keyword_for_drawer', { keyword: game.keyword });
-          
-          io.to(roomId).emit('new_chat_message', { 
-            user: 'System', 
-            text: `${game.players[0].username} is now the drawer. A new keyword has been set.` 
-          });
-        }
-        break; 
-      }
+      // Mark room as inactive in database
+      markRoomInactive(roomId)
+        .then(() => console.log(`Room ${roomId} marked as inactive in database`))
+        .catch(err => console.error(`Error marking room ${roomId} as inactive:`, err));
+      // TODO: Add handler if the room is rejoined - then markRoomAsActive again.
+      await disconnectRoomSockets(roomId);
+      // TODO : Remove from memory
+      // delete games[roomId];
+    } else if (removedPlayer.id === game.drawerId) { 
+        // TODO : Fix new drawer logic.
     }
   });
 });
 
 app.get("/api/ping", (req, res) => {
   res.send("pong");
+});
+
+app.post('/admin/disconnect-all', (req, res) => {
+    io.sockets.sockets.forEach((socket) => {
+        console.log(`Socket disconnected ${socket.id}`);
+        socket.disconnect(true);
+    });
+    res.send('All sockets disconnected.');
 });
 
 const PORT = 4000;
