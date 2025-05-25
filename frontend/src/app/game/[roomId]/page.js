@@ -4,6 +4,7 @@ import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import io from 'socket.io-client';
 import { ReactSketchCanvas } from 'react-sketch-canvas';
 import { jwtDecode } from 'jwt-decode';
+import GameEndPopup from '../../components/GameEndPopup';
 
 export default function GamePage() {
     // TODO: Change logic to rely on the game object in memory.
@@ -43,6 +44,8 @@ export default function GamePage() {
     const timerIntervalRef = useRef(null);
     const [nextRoundSeconds, setNextRoundSeconds] = useState(null);
     const nextRoundTimerRef = useRef(null);
+
+    const [gameEndData, setGameEndData] = useState(null);
 
     // function to retrieve roomID
     useEffect(() => {
@@ -141,22 +144,37 @@ export default function GamePage() {
         });
 
         // OK
-        newSocket.on('drawing_data_broadcast', (data) => {
-            if (!isDrawerRef.current && canvasRef.current) { // Use ref for current isDrawer status
-                canvasRef.current.clearCanvas();
-                canvasRef.current.loadPaths(data.paths);
-            }
-        });
+    newSocket.on('drawing_data_broadcast', (data) => {
+        if (!isDrawerRef.current && canvasRef.current) { // Use ref for current isDrawer status
+            canvasRef.current.clearCanvas();
+            canvasRef.current.loadPaths(data.paths);
+        }
+    });
 
-        return () => {
-            if (socketRef.current) {
+    newSocket.on('game_ended', (data) => {
+        console.log('Game ended with data:', data);
+        setGameEndData(data);
+    });
+
+    // Cleanup all event listeners and disconnect socket
+    return () => {
+        newSocket.off('game_started');
+        newSocket.off('update_game');
+        newSocket.off('end_round');
+        newSocket.off('new_round');
+        newSocket.off('new_keyword');
+        newSocket.off('new_chat_message');
+        newSocket.off('update_guessed');
+        newSocket.off('drawing_data_broadcast');
+        newSocket.off('game_ended');
+        
+        if (socketRef.current) {
             socketRef.current.disconnect();
             socketRef.current = null;
             setCurrentSocketId(null);
-            }
         }
-
-    }, [params.roomId]); // Only re-run if roomId changes or on mount/unmount
+    }
+}, [params.roomId]); // Only re-run if roomId changes or on mount/unmount
 
     // Local timer for countdown display
     useEffect(() => {
@@ -586,6 +604,15 @@ export default function GamePage() {
                     <button type="submit" disabled={isDrawer}>Send</button>
                 </form>
             </div>
+            {gameEndData && (
+    <GameEndPopup
+        winner={gameEndData.winner}
+        scores={gameEndData.scores}
+        gameStats={gameEndData.gameStats}
+        socket={socketRef.current}
+        roomId={roomId}
+    />
+)}
         </div>
     );
 }

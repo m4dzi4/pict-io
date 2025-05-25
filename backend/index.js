@@ -58,6 +58,13 @@ async function generateRoomId() {
   return newRoomId;
 }
 
+async function disconnectRoomSockets(roomId) {
+    const sockets = await io.in(roomId).fetchSockets();
+    sockets.forEach(socket => {
+        console.log(`Disconnecting socket ${socket.id} from room ${roomId}`);
+        socket.disconnect(true);
+    });
+}
 function getRandomKeyword() {
   // TODO : Add a check for previous rounds not having the same keyword
   return KEYWORDS_LIST[Math.floor(Math.random() * KEYWORDS_LIST.length)];
@@ -370,13 +377,14 @@ io.on("connection", (socket) => {
             dbUserId: joiningUserId
         };
         game.players.push(newPlayer);
-        game.scores[joiningUserId] = 0; // Initialize score for the new player
+        const scoreKey = isAuthenticated ? joiningUserId : socket.id;
+        game.scores[scoreKey] = 0;
         socket.join(roomId);
         console.log(`User ${socket.id} (username: ${joiningUsername}) joined room ${roomId}.`);
 
         callback({ success: true, game: publicGameState});
         
-        socket.broadcast.to(roomId).emit('update_game', { players: game.players, drawerId: game.drawerId, drawingPaths: game.drawingPaths});
+        io.to(roomId).emit('update_game', { players: game.players, drawerId: game.drawerId, drawingPaths: game.drawingPaths});
         io.to(roomId).emit('new_chat_message', { 
           user: 'System', 
           text: `${newPlayer.username} has connected.` 
@@ -457,53 +465,135 @@ io.on("connection", (socket) => {
 
     // Check if game should end
     if (game.gameMode === 'rounds' && game.currentRound >= (game.maxRounds)) {
-        endGame(roomId, currentRound);
+        endGame(roomId, game.currentRound);
     } else {
       // Start next round after a short delay (e.g., 3 seconds)
         setTimeout(() => startNewRound(roomId), 3000);
     }
   }
 
+  function endGame(roomId, currentRound = null) {
+    const game = games[roomId];
+    if (!game) return;
+
+    const roundToReport = currentRound || game.currentRound;
+    
+    // Zatrzymaj timer rundy jeśli istnieje
+    if (game.roundTimer) {
+        clearTimeout(game.roundTimer);
+        game.roundTimer = null;
+    }
+
+    // Zmień status gry
+    game.gameStatus = 'ended';
+    
+    // Znajdź zwycięzcę (gracz z najwyższym wynikiem)
+    let highestScore = 0;
+    let winner = null;
+
+    Object.entries(game.scores).forEach(([playerId, score]) => {
+        if (score > highestScore) {
+            highestScore = score;
+            winner = playerId;
+        }
+    });
+
+    // Znajdź nazwę zwycięzcy
+    let winnerName = "Unknown";
+    if (winner) {
+        // Szukaj najpierw po socket.id, potem po dbUserId
+        const winnerPlayer = game.players.find(p => p.id === winner || p.dbUserId === winner);
+        if (winnerPlayer) {
+            winnerName = winnerPlayer.username;
+        }
+    }
+
+    // Wyślij wiadomość o końcu gry
+    io.to(roomId).emit('new_chat_message', { 
+        user: 'System', 
+        text: `Game ended! Winner: ${winnerName}, score: ${highestScore} points.`,
+        type: 'game_end'
+    });
+    
+    // Wyślij event o końcu gry z końcowymi wynikami
+    io.to(roomId).emit('game_ended', {
+        scores: game.scores,
+        winner: {
+            id: winner,
+            name: winnerName,
+            score: highestScore
+        },
+        gameStats: {
+            rounds: roundToReport,
+            totalTime: Date.now() - game.startTime
+        }
+        
+    });
+    setTimeout(async () => {
+    // Rozłącz wszystkie sockety w pokoju
+    await disconnectRoomSockets(roomId);
+    
+    // Usuń pokój z pamięci
+    delete games[roomId];
+    
+    // Oznacz pokój jako nieaktywny w bazie danych
+    await markRoomInactive(roomId);
+  }, 10000); // 10 sekund na wyświetlenie wyników
+    
+}
   // If the guess is correct, update the game state and notify players
   function correct_guess(roomId, senderId) {
       const game = games[roomId];
-      const guesser = game.players.find(p => p.id === senderId);
+      let guesser = game.players.find(p => p.id === senderId);
+      if (!guesser) {
+        guesser = game.players.find(p => p.dbUserId === senderId);
+      }
       // Update the scores
-      game.scores[senderId] = (game.scores[senderId]) + 1;  
+      const scoreKey = guesser ? (guesser.dbUserId || guesser.id) : senderId;
+      game.scores[scoreKey] = (game.scores[scoreKey] || 0) + 1;  
 
       // 1. Special message only to the guesser
-      io.to(senderId).emit('new_chat_message', { 
+      const socketId = guesser ? guesser.id : senderId;
+      io.to(socketId).emit('new_chat_message', { 
           user: 'System', 
           text: `Correct! You guessed the word: ${game.keyword}!`,
           type: 'correct_guess'
       });
 
-      // 2. Notify all others (including drawer)
-      socket.broadcast.to(roomId).emit('new_chat_message', { 
+      // 2. Notify all others (including drawer) - FIXED: using io instead of socket
+      io.to(roomId).emit('new_chat_message', { 
           user: 'System', 
           text: `${guesser ? guesser.username : 'Someone'} has guessed the word!`,
           type: 'other_correct'
       });
 
       // 3. Update guessed to disable chat for the guesser
-      io.to(senderId).emit('update_guessed');
+      io.to(socketId).emit('update_guessed');
 
-      // 4, Check if that means end of the game
-      if (game.gameMode === 'points' && game.scores[senderId] >= (game.pointsToWin)) {
-          endGame(roomId, senderId);
+      // 4. Check if that means end of the game
+      if (game.gameMode === 'points' && game.scores[scoreKey] >= (game.pointsToWin)) {
+          endGame(roomId, scoreKey);
       }
 
-      // 4. Check if all guessers have guessed correctly
+      // 5. Check if all guessers have guessed correctly - FIXED logic
       const allGuessers = game.players.filter(p => p.id !== game.drawerId);
       const correctGuessers = game.round_history[game.currentRound].correct_guesses;
       console.log(`All guessers: ${allGuessers.map(p => p.username).join(', ')}`);
-      console.log(`Correct guessers: ${correctGuessers.map(p => p.username).join(', ')}`);
+      console.log(`Correct guessers: ${correctGuessers.join(', ')}`);
       console.log(`drawerId: ${game.drawerId}`);
-      if (allGuessers.length > 0 && allGuessers.every(p => correctGuessers.includes(p.id))) {
-          endRound(roomId, "all_guessed");
+      
+      // Fixed: properly check if every guesser has correctly guessed
+      const allGuessedCorrectly = allGuessers.every(p => {
+        return correctGuessers.includes(p.id) || (p.dbUserId && correctGuessers.includes(p.dbUserId));
+      });
+    
+      if (allGuessers.length > 0 && allGuessedCorrectly) {
+        endRound(roomId, "all_guessed");
       }
-  }
 
+    }
+    
+   
   function startNewRound(roomId) {
     const game = games[roomId];
     game.drawingPaths = [];
@@ -519,14 +609,13 @@ io.on("connection", (socket) => {
     if (game.roundTimer) clearTimeout(game.roundTimer);
     game.roundTimer = setTimeout(() => endRound(roomId), roundDurationMs);
 
-    // Emit new_round with roundEndTime
+    // Emit new_round with roundEndTime - FIXED: removed duplicate currentRound
     io.to(roomId).emit('new_round', {
         drawingPaths: [],
         currentRound: game.currentRound,
         maxRounds: game.maxRounds,
         drawerId: game.drawerId,
-        currentRound: game.currentRound,
-        roundEndTime: game.roundEndTime, // <--- Only sent here!
+        roundEndTime: game.roundEndTime,
         gameStatus: 'playing'
     });
 
@@ -540,50 +629,61 @@ io.on("connection", (socket) => {
       const game = games[roomId];
       game.gameStatus = 'playing';
       game.currentRound = 0;
+      game.startTime = Date.now(); // Dodaj tę linię
       startNewRound(roomId);
       // Notify everyone that the game is starting
       io.to(roomId).emit('game_started');
       callback({ gameStatus: 'playing'})
   });
 
-async function disconnectRoomSockets(roomId) {
-    const sockets = await io.in(roomId).fetchSockets();
-    sockets.forEach(socket => {
-        console.log(`Disconnecting socket ${socket.id} from room ${roomId}`);
-        socket.disconnect(true);
-    });
-}
+
 
 socket.on("disconnect", async () => {
     console.log("Socket disconnected:", socket.id);
-    roomId = socket.roomId;
+    const roomId = socket.roomId; // FIXED: Added const declaration
     const game = games[roomId];
     if (!game) {
         console.warn(`No game found for room ${roomId}.`);
         return;
     }
+    
     const playerIndex = game.players.findIndex(p => p.id === socket.id);
-    const removedPlayer = game.players.splice(playerIndex, 1)[0];
-    io.to(roomId).emit('new_chat_message', { 
-        user: 'System', 
-        text: `${removedPlayer.username} has disconnected.` 
-    });
-    io.to(roomId).emit('update_game', { players: game.players, drawerId: game.drawerId, drawingPaths: game.drawingPaths });
+    
+    // FIXED: Check if player exists before trying to access properties
+    if (playerIndex !== -1) {
+        const removedPlayer = game.players.splice(playerIndex, 1)[0];
+        io.to(roomId).emit('new_chat_message', { 
+            user: 'System', 
+            text: `${removedPlayer.username} has disconnected.` 
+        });
+        io.to(roomId).emit('update_game', { 
+            players: game.players, 
+            drawerId: game.drawerId, 
+            drawingPaths: game.drawingPaths 
+        });
+        
+        // Handle drawer disconnection
+        if (game.drawerId === removedPlayer.id) {
+            // TODO: Handle drawer disconnection properly
+            console.log(`Drawer ${removedPlayer.username} disconnected`);
+        }
+    } else {
+        console.log(`Player with socket ID ${socket.id} not found in room ${roomId}`);
+    }
+    
+    // Check if room is empty
     if (game.players.length === 0) {
-      console.log(`Room ${roomId} is empty. Cleaning up from database and memory.`);
-      
-      // Mark room as inactive in database
-      markRoomInactive(roomId)
-        .then(() => console.log(`Room ${roomId} marked as inactive in database`))
-        .catch(err => console.error(`Error marking room ${roomId} as inactive:`, err));
-      // TODO: Add handler if the room is rejoined - then markRoomAsActive again.
-      await disconnectRoomSockets(roomId);
-      // TODO : Remove from memory
-      // delete games[roomId];
-    } else if (removedPlayer.id === game.drawerId) { 
-        // TODO : Fix new drawer logic.
+        console.log(`Room ${roomId} is empty. Cleaning up from database and memory.`);
+        
+        // Mark room as inactive in database
+        await markRoomInactive(roomId);
+        
+        // FIXED: Actually delete the game from memory
+        delete games[roomId];
     }
   });
+
+  // [Other event handlers...]
 });
 
 app.get("/api/ping", (req, res) => {
@@ -596,7 +696,10 @@ app.post('/admin/disconnect-all', (req, res) => {
         socket.disconnect(true);
     });
     res.send('All sockets disconnected.');
-});
+    // Dodaj obsługę zdarzenia destroy_room
+  });
+ 
 
 const PORT = 4000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
