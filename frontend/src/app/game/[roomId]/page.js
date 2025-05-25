@@ -563,7 +563,7 @@ export default function GamePage() {
                         onChange={handleCanvasChange}
                         style={{ border: 'none', width: '100%', height: '100%' }}
                     />
-                    {(!isDrawer || (game.gameStatus === 'between_rounds')) && (
+                    {(!isDrawer ||  game.gameStatus !== 'playing') && (
                         <div style={{ position: 'absolute', inset: 0, zIndex: 10, cursor: 'not-allowed' }} />
                     )}
                 </div>
