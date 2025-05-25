@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 // import io from 'socket.io-client'; // No longer needed here
 import { jwtDecode } from 'jwt-decode';
-import Link from 'next/link';
 
 // let socketClient = null; // Remove
 

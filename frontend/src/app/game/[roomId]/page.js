@@ -6,10 +6,12 @@ import { ReactSketchCanvas } from 'react-sketch-canvas';
 import { jwtDecode } from 'jwt-decode';
 
 export default function GamePage() {
-
     // TODO: Change logic to rely on the game object in memory.
-    game = {}
-    // define state variables
+    // Game state variables stored inside a copy of the game object from backend
+    const [game, setGame] = useState({});
+    const [currentSocketId, setCurrentSocketId] = useState(null);
+
+    // Canvas variables
     const canvasRef = useRef(null);
     const socketRef = useRef(null);
     const [eraseMode, setEraseMode] = useState(false);
@@ -17,50 +19,34 @@ export default function GamePage() {
     const [eraserWidth, setEraserWidth] = useState(10);
     const [strokeColor, setStrokeColor] = useState("#000000");
     const [canvasColor, setCanvasColor] = useState("#ffffff");
-    
-    const [gameStatus, setGameStatus] = useState('playing'); // 'waiting', 'playing', 'ended'
-    const [canStartGame, setCanStartGame] = useState(false);
-    const [chatInput, setChatInput] = useState('');
-    const [chatMessages, setChatMessages] = useState([]);
-    const [playersInRoom, setPlayersInRoom] = useState([]);
-    const [currentSocketId, setCurrentSocketId] = useState(null); // Tracks socket connection status
 
+    // Routing variables
     const router = useRouter();
     const params = useParams();
     const queryParams = useSearchParams();
 
+    // Game and chat variables
     const [roomId, setRoomId] = useState(null);
     const [isDrawer, setIsDrawer] = useState(false);
     const [isRoomOwner, setIsRoomOwner] = useState(false);
     const isDrawerRef = useRef(isDrawer); // Ref to hold the latest isDrawer state for callbacks
-    const [currentKeyword, setCurrentKeyword] = useState(null);
     const [loggedInUser, setLoggedInUser] = useState(null);
     const [accessCodeInput, setAccessCodeInput] = useState('');
     const [requiresAccessCode, setRequiresAccessCode] = useState(false);
     const [joinedRoom, setJoinedRoom] = useState(false);
+    const [chatMessages, setChatMessages] = useState([]);
+    const [chatInput, setChatInput] = useState('');
+    const [canStartGame, setCanStartGame] = useState(true);
+    const [hasGuessedCorrectly, setHasGuessedCorrectly] = useState(false);
+    const [roundEndTime, setRoundEndTime] = useState(null);
+    const [secondsLeft, setSecondsLeft] = useState(null);
+    const timerIntervalRef = useRef(null);
+    const [nextRoundSeconds, setNextRoundSeconds] = useState(null);
+    const nextRoundTimerRef = useRef(null);
 
-    // Update isDrawerRef whenever isDrawer state changes
+    // function to retrieve roomID
     useEffect(() => {
-        isDrawerRef.current = isDrawer;
-    }, [isDrawer]);
-
-    // Effect 1: Socket Connection Management and Core Event Listeners
-    useEffect(() => {
-        const rIdFromParams = params.roomId;
-        if (!rIdFromParams) {
-            alert('Room ID is missing!');
-            router.push('/');
-            return;
-        }
-        setRoomId(rIdFromParams); // Set roomId state for other effects
-
-        console.log("GamePage Effect 1: Setting up socket for roomId", rIdFromParams);
-        // Disconnect previous socket if any (e.g. if params.roomId changes for a new room)
-
-        if (socketRef.current) {
-                socketRef.current.disconnect();
-        }
-
+        setRoomId(params.roomId);
         const newSocket = io('http://localhost:4000');
         socketRef.current = newSocket;
 
@@ -68,66 +54,93 @@ export default function GamePage() {
             setCurrentSocketId(newSocket.id); // Signal that socket is connected and ready
         });
 
-        newSocket.on('disconnect', (reason) => {
+        newSocket.on('disconnect', () => {
+            socketRef.current = null;
             setCurrentSocketId(null);
-            setJoinedRoom(false); // Reset joined status on disconnect
-            // Potentially show a message or attempt reconnect based on reason
         });
 
-        newSocket.on('game_started', () => {
-            console.log("Game has started!");
-            setGameStatus('playing');
+        // connect, disconnect
+        // game started, new round, time is over
+        // chat message
+        // join room, leave room
 
+        newSocket.on('game_started', () => {
             // Only add one system message - don't add messages about the word here
             setChatMessages(prev => [...prev, {
                 user: 'System', 
-                text: 'The game has started! First round beginning.',
+                text: 'The game has started!',
                 type: 'game_event'
             }]);
         });
 
-        newSocket.on('new_chat_message', (data) => {
-                setChatMessages((prevMessages) => [...prevMessages, data]);
-            });
-        
-        newSocket.on('new_keyword_for_drawer', (data) => {
-                if (isDrawerRef.current) { 
-                    console.log("Received word as drawer:", data.keyword);
-                    setCurrentKeyword(data.keyword);
-                }
-            });
-        
-            // Modified handler for keyword_guessed - end of a round, transition to next
-        newSocket.on('keyword_guessed', (data) => {
-            console.log("Word guessed, round ending:", data);
-            setRoundCount(prev => prev + 1);
-
-            // Add only one chat message for keyword guessed
-            setChatMessages(prevMessages => [
-                ...prevMessages, 
-                { 
-                    user: 'System', 
-                    text: data.message, 
-                    type: 'keyword_event' 
-                }
-            ]);
-
-            // Reset the drawer's UI
-            if (isDrawerRef.current && canvasRef.current) {
-                canvasRef.current.clearCanvas();
-            }
-
-            // Briefly show "between rounds" status
-            setGameStatus('between_rounds');
-
-            // After a delay, go back to playing state
-            setTimeout(() => {
-                if (socketRef.current?.connected) {
-                    setGameStatus('playing');
-                }
-            }, 3000);
+        newSocket.on('update_game', (data) => {
+            setGame(prev => ({
+                ...prev,
+                players: data.players,
+                drawerId: data.drawerId,
+                drawingPaths: data.drawingPaths
+            }));
         });
 
+        newSocket.on('end_round', (data) => {
+            setRoundEndTime(null);
+            setSecondsLeft(null);
+            clearInterval(timerIntervalRef.current);
+            setGame(prev => ({
+                ...prev,
+                gameStatus: data.gameStatus
+            }));
+            setNextRoundSeconds(3); // 3 seconds until next round
+            nextRoundTimerRef.current = setInterval(() => {
+                setNextRoundSeconds(prev => {
+                    if (prev === 1) {
+                        clearInterval(nextRoundTimerRef.current);
+                        return null;
+                    }
+                    return prev - 1;
+                });
+            }, 1000);
+        });
+
+        newSocket.on('new_round', (data) => {
+            if (nextRoundTimerRef.current) {
+                clearInterval(nextRoundTimerRef.current);
+                setNextRoundSeconds(null);
+            }
+            setGame(prev => ({
+                ...prev,
+                drawingPaths: data.drawingPaths,
+                currentRound: data.currentRound,
+                drawerId: data.drawerId,
+                keyword: data.keyword,
+                maxRounds: data.maxRounds,
+                gameStatus: data.gameStatus,
+            }));
+            (data.drawerId === newSocket.id) ? setIsDrawer(true) : setIsDrawer(false);
+            setHasGuessedCorrectly(false);
+            setRoundEndTime(data.roundEndTime);
+            if (canvasRef.current) {
+                canvasRef.current.clearCanvas();
+            }
+        })
+
+        newSocket.on('new_keyword', (data) => {
+            setGame(prev => ({
+                ...prev,
+                keyword: data.keyword
+            }));
+        })
+
+        // OK
+        newSocket.on('new_chat_message', (data) => {
+            setChatMessages((prevMessages) => [...prevMessages, data]);
+        });
+
+        newSocket.on('update_guessed', () => {
+            setHasGuessedCorrectly(true);
+        });
+
+        // OK
         newSocket.on('drawing_data_broadcast', (data) => {
             if (!isDrawerRef.current && canvasRef.current) { // Use ref for current isDrawer status
                 canvasRef.current.clearCanvas();
@@ -135,64 +148,62 @@ export default function GamePage() {
             }
         });
 
-        newSocket.on('game_update', (data) => {
-            const thisClientIsNowDrawer = data.drawerId === socketRef.current?.id;
-            const wasPreviouslyDrawer = isDrawerRef.current;
-
-            // Update isDrawer state based on game_update
-            setIsDrawer(thisClientIsNowDrawer);
-
-            // Update players list
-            setPlayersInRoom(data.players || []);
-
-            // Update canStartGame state
-            setCanStartGame(thisClientIsNowDrawer && (data.players?.length >= 2) && gameStatus === 'waiting');
-
-            // Clear canvas and handle transitions when drawer changes
-            if (thisClientIsNowDrawer !== wasPreviouslyDrawer) {
-                if (thisClientIsNowDrawer) {
-                    console.log("You are now the drawer - waiting for word");
-                    if (canvasRef.current) canvasRef.current.clearCanvas();
-                    // Don't set current keyword here - wait for new_keyword_for_drawer
-                } else {
-                    console.log("You are now a guesser");
-                    if (canvasRef.current) canvasRef.current.clearCanvas();
-                }
-            }
-
-            // Load existing drawings if we're a guesser
-            if (data.drawingPaths && canvasRef.current && !thisClientIsNowDrawer) {
-                // Clear first, then load
-                canvasRef.current.clearCanvas()
-                canvasRef.current.loadPaths(data.drawingPaths);
-            }
-        });
-
-        newSocket.on('new_keyword_for_drawer', (data) => {
-            if (isDrawerRef.current) { // Use ref for current isDrawer status
-                setCurrentKeyword(data.keyword);
-                setChatMessages(prev => [...prev, {user: 'System', text: `Your new word is: ${data.keyword}`}]);
-            }
-        });
-
         return () => {
-            if (newSocket) {
-                console.log('GamePage: Disconnecting socket on unmount/roomId change (Effect 1 cleanup)', newSocket.id);
-                newSocket.disconnect();
-                socketRef.current = null;
-                setCurrentSocketId(null);
-                setJoinedRoom(false);
+            if (socketRef.current) {
+            socketRef.current.disconnect();
+            socketRef.current = null;
+            setCurrentSocketId(null);
             }
-        };
-    }, [params.roomId, router]); // Only re-run if roomId changes or on mount/unmount
+        }
 
-    // Effect 2: Handle Joining Logic
+    }, [params.roomId]); // Only re-run if roomId changes or on mount/unmount
+
+    // Local timer for countdown display
+    useEffect(() => {
+        if (!roundEndTime) {
+            setSecondsLeft(null);
+            return;
+        }
+        function updateTimer() {
+            const now = Date.now();
+            const diff = Math.max(0, Math.floor((roundEndTime - now) / 1000));
+            setSecondsLeft(diff);
+        }
+        updateTimer();
+        timerIntervalRef.current = setInterval(updateTimer, 250);
+        return () => clearInterval(timerIntervalRef.current);
+    }, [roundEndTime]);
+
+    useEffect(() => {
+        if (!isDrawer) {
+            setGame(prev => ({
+                ...prev,
+                drawingPaths: [],
+                keyword: null,
+            }));
+        }
+        isDrawerRef.current = isDrawer;
+    }, [isDrawer]); // Only re-run if isDrawer changes
+
+    useEffect(() => {
+    // Only update for guessers (not the drawer)
+        if (!isDrawer && canvasRef.current && game.drawingPaths) {
+            canvasRef.current.clearCanvas();
+            if (game.drawingPaths.length > 0) {
+                canvasRef.current.loadPaths(game.drawingPaths);
+            }
+        }
+    }, [game.drawingPaths, isDrawer]);
+
+
+    // should be handled by backend?
     useEffect(() => {
         const token = localStorage.getItem('jwtToken');
         if (token) {
             try {
                 const decoded = jwtDecode(token);
                 setLoggedInUser({ username: decoded.username, userId: decoded.userId });
+                (decoded.userId === game.ownerId) ? setIsRoomOwner(true) : setIsRoomOwner(false);
             } catch (e) { console.error("Failed to decode token on game page", e); localStorage.removeItem('jwtToken'); }
         }
 
@@ -207,38 +218,48 @@ export default function GamePage() {
         // Attempt to join if conditions are met
         if (currentSocketId && roomId && !joinedRoom) { // Check currentSocketId to ensure socket is connected
             if (!isPrivateRoom || (isPrivateRoom && accessCodeInput.trim())) { // If not private, or private and code is provided
-                console.log("GamePage Effect 2: Attempting to join room", roomId);
                 attemptJoinRoom(socketRef.current, roomId, token, accessCodeInput);
             }
         }
     }, [roomId, currentSocketId, joinedRoom, accessCodeInput, queryParams]);
 
+    // OK
     const handleStartGame = () => {
         if (isRoomOwner && socketRef.current && socketRef.current.connected && roomId) {
-            console.log("Requesting to start the game as room owner");
-            socketRef.current.emit('start_game', { roomId });
+            socketRef.current.emit('start_game', { roomId }, (response) => {
+            setGame(prev => ({
+                    ...prev,
+                    gameStatus: response.gameStatus
+                }));
+            });
             setCanStartGame(false);
         }
     };
 
+    // OK, should be handled by backend?
     const attemptJoinRoom = (socketInstance, rId, token, code) => {
         if (!socketInstance || !socketInstance.connected) {
             console.warn("AttemptJoinRoom called but socket not connected.");
             return;
         }
         socketInstance.emit('join_room', { 
-            roomId: rId, 
+            roomId: rId,
             token: token,
             accessCode: code 
         }, (response) => {
             if (response.success) {
-                console.log(`Successfully joined room ${rId}.`);
                 setJoinedRoom(true);
-                setRequiresAccessCode(false); 
-                setIsRoomOwner(response.isRoomOwner);
+                setRequiresAccessCode(false);
                 setChatMessages(prev => [...prev, {user: 'System', text: `You joined room ${rId}.`}]);
-                if (response.drawingPaths && canvasRef.current) {
-                    canvasRef.current.loadPaths(response.drawingPaths);
+                setGame(response.game)
+                if (response.game.gameStatus === 'playing') {
+                    setRoundEndTime(response.game.roundEndTime);
+                    if (canvasRef.current && response.game.drawingPaths) {
+                        canvasRef.current.clearCanvas();
+                        if (response.game.drawingPaths.length > 0) {
+                            canvasRef.current.loadPaths(response.game.drawingPaths);
+                        }
+                    }
                 }
             } else {
                 alert(`Failed to join room: ${response.message}`);
@@ -259,10 +280,6 @@ export default function GamePage() {
 
     const handleAccessCodeSubmit = (e) => {
         e.preventDefault();
-        // Access code input is now a dependency of Effect 2, which will trigger attemptJoinRoom
-        // No direct call to attemptJoinRoom here, just update state.
-        // The useEffect will pick up the change in accessCodeInput.
-        // However, for immediate feedback, we can call it if conditions are right.
         if (socketRef.current && socketRef.current.connected && roomId && accessCodeInput.trim()) {
             const token = localStorage.getItem('jwtToken');
             attemptJoinRoom(socketRef.current, roomId, token, accessCodeInput);
@@ -273,67 +290,80 @@ export default function GamePage() {
         }
     };
     
-    // Debounced function for sending drawing updates
-    const debouncedSendDrawing = useCallback(
-        debounce(async (pathsToEmit) => {
-            console.log("[Debounce] Executing. isDrawer:", isDrawerRef.current, "roomId:", roomId, "socketConnected:", !!(socketRef.current && socketRef.current.connected));
-            console.log("[Debounce] Received pathsToEmit from onChange, count:", pathsToEmit?.length);
+    // Not used anymore.
+    // OK
+    // const debouncedSendDrawing = useCallback(
+    //     debounce(async (pathsToEmit) => {
+    //         if (isDrawerRef.current && roomId && socketRef.current && socketRef.current.connected) {
+    //             const paths = pathsToEmit;
 
-            if (isDrawerRef.current && roomId && socketRef.current && socketRef.current.connected) {
-                const paths = pathsToEmit;
+    //             if (Array.isArray(paths)) { // Changed condition to handle both empty and non-empty arrays
+    //                 socketRef.current.emit('drawing_update', { roomId, paths });
+    //             } else {
+    //                 console.error("[Debounce] Paths from onChange is not a valid array. Not emitting. Paths value:", paths);
+    //             }
+    //         } else {
+    //             console.error("[Debounce] Conditions not met for emitting drawing_update (drawer, roomId, socket).");
+    //         }
+    //     }, 0),
+    //     [roomId]
+    // );
 
-                if (Array.isArray(paths)) { // Changed condition to handle both empty and non-empty arrays
-                    console.log(`[Debounce] Drawer (${socketRef.current?.id}) emitting drawing_update for room ${roomId}: ${paths.length} paths`);
-                    socketRef.current.emit('drawing_update', { roomId, paths });
-                } else {
-                    console.log("[Debounce] Paths from onChange is not a valid array. Not emitting. Paths value:", paths);
-                }
+
+    // // OK
+    // function debounce(func, delay) {
+    //     let timeout;
+    //     return function executedFunction(...args) {
+    //         const later = () => {
+    //             clearTimeout(timeout);
+    //             func(...args);
+    //         };
+    //         clearTimeout(timeout);
+    //         timeout = setTimeout(later, delay);
+    //     };
+    // }
+
+    // OK
+    const sendDrawing = (pathsToEmit) => {
+    if (isDrawerRef.current && roomId && socketRef.current && socketRef.current.connected) {
+            if (Array.isArray(pathsToEmit)) {
+                socketRef.current.emit('drawing_update', { roomId, paths: pathsToEmit });
             } else {
-                console.log("[Debounce] Conditions not met for emitting drawing_update (drawer, roomId, socket).");
+                console.error("[sendDrawing] Paths from onChange is not a valid array. Not emitting. Paths value:", pathsToEmit);
             }
-        }, 200),
-        [roomId]
-    );
-
-    function debounce(func, delay) {
-        let timeout;
-        return function executedFunction(...args) {
-            const later = () => {
-                clearTimeout(timeout);
-                func(...args);
-            };
-            clearTimeout(timeout);
-            timeout = setTimeout(later, delay);
-        };
-    }
-
-    // Modified to accept updatedPaths from the onUpdate prop
-    const handleCanvasChange = (updatedPaths) => {
-        // This log is crucial to see if onChange is firing and what paths it provides
-        console.log("handleCanvasChange called by onChange. isDrawerRef.current:", isDrawerRef.current, "Received updatedPaths count:", updatedPaths?.length);
-        if (isDrawerRef.current) {
-            debouncedSendDrawing(updatedPaths);
+        } else {
+            console.error("[sendDrawing] Conditions not met for emitting drawing_update (drawer, roomId, socket).");
         }
     };
 
+    // OK
+    const handleCanvasChange = (updatedPaths) => {
+        if (isDrawerRef.current) {
+            //debouncedSendDrawing(updatedPaths);
+            sendDrawing(updatedPaths);
+        }
+    };
+
+    // OK
     const handleSendChatMessage = (e) => {
         e.preventDefault();
         if (!chatInput.trim() || !roomId || !socketRef.current || !socketRef.current.connected) return;
         const token = localStorage.getItem('jwtToken');
         // Send the chat message
-        socketRef.current.emit('send_chat_message', { roomId, text: chatInput, token });
+        socketRef.current.emit('send_chat_message', { roomId: roomId, text: chatInput, token: token });
         setChatInput('');
     };
 
     const effectiveReadOnly = !isDrawer;
 
-    // Tool handlers (simplified)
+    // OK
     const handleEraserClick = () => { if (!effectiveReadOnly && canvasRef.current) { setEraseMode(true); canvasRef.current.eraseMode(true); }};
     const handlePenClick = () => { if (!effectiveReadOnly && canvasRef.current) { setEraseMode(false); canvasRef.current.eraseMode(false); }};
     const handleStrokeWidthChange = (event) => { if (!effectiveReadOnly) setStrokeWidth(+event.target.value); };
     const handleEraserWidthChange = (event) => { if (!effectiveReadOnly) setEraserWidth(+event.target.value); };
     const handleStrokeColorChange = (event) => { if (!effectiveReadOnly) setStrokeColor(event.target.value); };
     
+    // OK
     const handleUndoClick = async () => {
         if (!effectiveReadOnly && canvasRef.current) {
             await canvasRef.current.undo();
@@ -342,8 +372,8 @@ export default function GamePage() {
             if (isDrawerRef.current && socketRef.current && socketRef.current.connected) {
                 try {
                     const paths = await canvasRef.current.exportPaths();
-                    console.log("After undo operation, manually fetched paths count:", paths?.length);
-                    debouncedSendDrawing(paths);
+                    // debouncedSendDrawing(paths);
+                    sendDrawing(paths);
                 } catch (error) {
                     console.error("Error getting paths after undo:", error);
                 }
@@ -351,6 +381,7 @@ export default function GamePage() {
         }
     };
 
+    // OK
     const handleRedoClick = async () => {
         if (!effectiveReadOnly && canvasRef.current) {
             await canvasRef.current.redo();
@@ -359,8 +390,8 @@ export default function GamePage() {
             if (isDrawerRef.current && socketRef.current && socketRef.current.connected) {
                 try {
                     const paths = await canvasRef.current.exportPaths();
-                    console.log("After redo operation, manually fetched paths count:", paths?.length);
-                    debouncedSendDrawing(paths);
+                    // debouncedSendDrawing(paths);
+                    sendDrawing(paths);
                 } catch (error) {
                     console.error("Error getting paths after redo:", error);
                 }
@@ -368,18 +399,21 @@ export default function GamePage() {
         }
     };
 
+    // OK
     const handleClearClick = async () => {
         if (!effectiveReadOnly && canvasRef.current) {
             await canvasRef.current.clearCanvas();
             
             // Since clearCanvas might not trigger onChange, manually send empty paths
             if (isDrawerRef.current && socketRef.current && socketRef.current.connected) {
-                console.log("After clear operation, sending empty paths array");
-                debouncedSendDrawing([]);
+                // debouncedSendDrawing([]);
+                sendDrawing([]);
             }
         }
     };
 
+
+    // JSX
     if (!roomId) return <div className="flex justify-center items-center h-screen">Loading room ID...</div>;
     
     if (requiresAccessCode && !joinedRoom) {
@@ -423,38 +457,57 @@ export default function GamePage() {
             <div style={{ flex: 2, display: 'flex', flexDirection: 'column', background: '#fff', border: '1px solid #ccc', borderRadius: 4, padding: 8, minWidth: 0 }}>
                 {/* Room and Status */}
                 <div style={{ marginBottom: 8 }}>
-                    <div>Room: {roomId}</div>
-                    <div>
+                    <div>Room: {game.roomId}, Owner: {game.ownerUsername} </div>
+                    {/* <div> 
                         {gameStatus === 'waiting' && (<span>Wait for game start.</span>)}
-                    </div>
+                    </div> */}
                     <div>
-                        {isRoomOwner && playersInRoom.length >= 2 && canStartGame && (
+                        {isRoomOwner && game.players.length >= 2 && canStartGame && (
                             <button onClick={handleStartGame}>Start Game</button>
                         )}
                     </div>
                     <div>
-                        {isDrawer ? (
-                            <div>
-                                <div>You are the Drawer!</div>
-                                {gameStatus === 'waiting' && <div>Waiting for game to start...</div>}
-                                {gameStatus === 'between_rounds' && <div>Get ready to draw a new word...</div>}
-                                {gameStatus === 'playing' && currentKeyword && <div>Your word: <b>{currentKeyword}</b></div>}
-                                {gameStatus === 'playing' && !currentKeyword && <div>Waiting for a word...</div>}
-                            </div>
+                        {game.gameStatus === 'playing' ? (
+                            isDrawer ? (
+                                <div>
+                                    {game.keyword && <div>You are the drawer. Your word: <b>{game.keyword}</b></div>}
+                                </div>
+                            ) : (
+                                <div>
+                                    <div>You are guessing. Try to guess what is being drawn!</div>
+                                </div>
+                            )
                         ) : (
                             <div>
-                                You are Guessing!
-                                {gameStatus === 'between_rounds' && ' New round starting soon...'}
-                                {gameStatus === 'playing' && ' Try to guess what is being drawn!'}
+                                {game.gameStatus === 'betweenRounds' && (
+                                    <div>
+                                        Waiting for next round...
+                                        {nextRoundSeconds !== null && (
+                                            <span> ({nextRoundSeconds})</span>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
                     <div>
-                        Players: {playersInRoom.join(', ')} {playersInRoom.length < 2 ? '(Need at least 2 players to start)' : ''}
+                        {game.gameStatus === 'playing' && game.currentRound && game.maxRounds && (
+                            <div>
+                                Round {game.currentRound} / {game.maxRounds}
+                            </div>
+                        )}
+                        {secondsLeft !== null && game.gameStatus === 'playing' && (
+                            <div>
+                                Time left: <b>{secondsLeft}</b> seconds
+                            </div>
+                        )}
+                    </div>
+                    <div>
+                        Players: {game.players.map(player => player.username).join(", ")} {game.players.length < 2 ? '(Need at least 2 players to start)' : ''}
                     </div>
                 </div>
                 {/* Drawing Tools */}
-                {isDrawer && (
+                {isDrawer && game.gameStatus === 'playing' && (
                     <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
                         <button onClick={handlePenClick} disabled={!eraseMode || !isDrawer}>Pen</button>
                         <button onClick={handleEraserClick} disabled={eraseMode || !isDrawer}>Eraser</button>
@@ -492,7 +545,7 @@ export default function GamePage() {
                         onChange={handleCanvasChange}
                         style={{ border: 'none', width: '100%', height: '100%' }}
                     />
-                    {!isDrawer && (
+                    {(!isDrawer || (game.gameStatus === 'between_rounds')) && (
                         <div style={{ position: 'absolute', inset: 0, zIndex: 10, cursor: 'not-allowed' }} />
                     )}
                 </div>
@@ -520,8 +573,14 @@ export default function GamePage() {
                         type="text"
                         value={chatInput}
                         onChange={e => setChatInput(e.target.value)}
-                        placeholder={isDrawer ? "You are drawing, can't guess!" : "Type your guess or chat..."}
-                        disabled={isDrawer}
+                        placeholder={
+                            isDrawer
+                                ? "You are drawing, can't guess!"
+                                : hasGuessedCorrectly
+                                    ? "You already guessed correctly!"
+                                    : "Type your guess or chat..."
+                        }
+                        disabled={isDrawer || hasGuessedCorrectly}
                         style={{ flex: 1, padding: 6, borderRadius: 4, border: '1px solid #ccc' }}
                     />
                     <button type="submit" disabled={isDrawer}>Send</button>
