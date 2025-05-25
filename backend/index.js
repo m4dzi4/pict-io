@@ -43,7 +43,7 @@ const io = new Server(server, {
 
 const JWT_SECRET = process.env.JWT_SECRET
 // TODO: should be handled as a call to the database
-const KEYWORDS_LIST = ["apple", "banana", "car", "house", "tree", "sun", "moon", "star", "book", "clock", "river", "mountain", "bridge", "flower", "fish"];
+//const KEYWORDS_LIST = ["apple", "banana", "car", "house", "tree", "sun", "moon", "star", "book", "clock", "river", "mountain", "bridge", "flower", "fish"];
 let games = {}; // roomID : game object
 
 async function generateRoomId() {
@@ -65,11 +65,28 @@ async function disconnectRoomSockets(roomId) {
         socket.disconnect(true);
     });
 }
-function getRandomKeyword() {
-  // TODO : Add a check for previous rounds not having the same keyword
-  return KEYWORDS_LIST[Math.floor(Math.random() * KEYWORDS_LIST.length)];
+async function getRandomKeyword() {
+  try {
+    const count = await prisma.keyword.count();
+    
+    if (count === 0) {
+      console.error('No keywords in the database!');
+      return "default";
+    }
+    
+    const randomIndex = Math.floor(Math.random() * count);
+    
+    const randomKeyword = await prisma.keyword.findMany({
+      skip: randomIndex,
+      take: 1,
+    });
+    
+    return randomKeyword[0].word;
+  } catch (error) {
+    console.error('Error:', error);
+    return "default"; 
+  }
 }
-
 function getDrawer(roomId) {
   // TODO : What if the player is no longer in the game - check for validity.
   const game = games[roomId];
@@ -537,7 +554,7 @@ io.on("connection", (socket) => {
     delete games[roomId];
     
     // Oznacz pokój jako nieaktywny w bazie danych
-    await markRoomInactive(roomId);
+   await deleteRoomFromDatabase(roomId);
   }, 10000); // 10 sekund na wyświetlenie wyników
     
 }
@@ -594,12 +611,12 @@ io.on("connection", (socket) => {
     }
     
    
-  function startNewRound(roomId) {
+  async function startNewRound(roomId) {
     const game = games[roomId];
     game.drawingPaths = [];
     game.currentRound += 1;
     game.drawerId = getDrawer(roomId);
-    game.keyword = getRandomKeyword();
+    game.keyword = await getRandomKeyword();
     console.log(`Starting new round ${game.currentRound} in room ${roomId}. Drawer: ${game.drawerId}, Keyword: ${game.keyword}`);
     game.round_history[game.currentRound] = {drawerId: game.drawerId, keyword: game.keyword, correct_guesses: [], all_guesses: {}};
     // Set round end time
