@@ -306,11 +306,15 @@ app.get('/api/rooms/validate/:roomId', async (req, res) => {
   }
 });
 
+// 1. Update getPublicGameState to handle undefined game
 function getPublicGameState(game) {
+    if (!game) {
+        return null; // Or return a default structure
+    }
+    
     return {
         roomId: game.roomId,
         ownerId: game.ownerId,
-        ownerUsername: game.ownerUsername,
         maxPlayers: game.maxPlayers,
         accessCode: game.accessCode,
         gameMode: game.gameMode,
@@ -341,6 +345,7 @@ io.on("connection", (socket) => {
     let joiningUsername = `Guest-${socket.id.substring(0,4)}`;
     let joiningUserId = null;
     let isAuthenticated = false;
+    let game = null; // Declare game here to keep it in scope
 
     if (token) {
         try {
@@ -354,11 +359,14 @@ io.on("connection", (socket) => {
     }
 
     try {
-        const game = games[roomId];
-        const publicGameState = getPublicGameState(game);
+        game = games[roomId]; // Assign to the variable declared above
+        
         if (!game) {
-          return callback({ success: false, message: 'Game session not found or not active.' });
+            return callback({ success: false, message: 'Game session not found or not active.' });
         }
+        
+        const publicGameState = getPublicGameState(game);
+        
         // If room is private, check access code (even if validated via HTTP, double check here)
         if (game.accessCode && game.accessCode !== providedAccessCode) {
             return callback({ success: false, message: 'Invalid access code for private room.' });
@@ -410,6 +418,18 @@ io.on("connection", (socket) => {
     } catch (error) {
         console.error(`Error in socket join_room for room ${roomId}:`, error);
         callback({ success: false, message: 'Failed to join room via socket.' });
+    }
+
+    
+    // Po dodaniu gracza sprawdź, czy to drugi gracz (anuluj timer)
+    if (game.players.length === 2 && game.singlePlayerTimer) {
+        clearTimeout(game.singlePlayerTimer);
+        game.singlePlayerTimer = null;
+        io.to(roomId).emit('new_chat_message', { 
+            user: 'System', 
+            text: `Another player has joined! The game can continue.`,
+            type: 'system'
+        });
     }
   });
   
@@ -657,7 +677,7 @@ io.on("connection", (socket) => {
 
 socket.on("disconnect", async () => {
     console.log("Socket disconnected:", socket.id);
-    const roomId = socket.roomId; // FIXED: Added const declaration
+    const roomId = socket.roomId;
     const game = games[roomId];
     if (!game) {
         console.warn(`No game found for room ${roomId}.`);
@@ -666,7 +686,6 @@ socket.on("disconnect", async () => {
     
     const playerIndex = game.players.findIndex(p => p.id === socket.id);
     
-    // FIXED: Check if player exists before trying to access properties
     if (playerIndex !== -1) {
         const removedPlayer = game.players.splice(playerIndex, 1)[0];
         io.to(roomId).emit('new_chat_message', { 
@@ -681,24 +700,27 @@ socket.on("disconnect", async () => {
         
         // Handle drawer disconnection
         if (game.drawerId === removedPlayer.id) {
-            // TODO: Handle drawer disconnection properly
             console.log(`Drawer ${removedPlayer.username} disconnected`);
+            if (game.gameStatus === 'playing') {
+                endRound(roomId, "drawer_left");
+            }
+        }
+        
+        // Sprawdź czy został tylko jeden gracz
+        if (game.players.length === 1) {
+            handleSinglePlayerRoom(roomId);
+        }
+        // Check if room is empty
+        else if (game.players.length === 0) {
+            console.log(`Room ${roomId} is empty. Cleaning up from database and memory.`);
+            
+            await deleteRoomFromDatabase(roomId);
+            delete games[roomId];
         }
     } else {
         console.log(`Player with socket ID ${socket.id} not found in room ${roomId}`);
     }
-    
-    // Check if room is empty
-    if (game.players.length === 0) {
-        console.log(`Room ${roomId} is empty. Cleaning up from database and memory.`);
-        
-        // Mark room as inactive in database
-        await markRoomInactive(roomId);
-        
-        // FIXED: Actually delete the game from memory
-        delete games[roomId];
-    }
-  });
+});
 
   socket.on('destroy_room', async ({ roomId }, callback) => {
     try {
@@ -741,6 +763,78 @@ socket.on("disconnect", async () => {
       callback?.({ success: false, message: 'Failed to destroy room' });
     }
   });
+
+// Handler dla zdarzenia 'leave_game'
+socket.on('leave_game', async ({ roomId }, callback) => {
+  try {
+    console.log(`User ${socket.id} attempting to leave room ${roomId}`);
+    
+    const game = games[roomId];
+    if (!game) {
+      return callback?.({ success: false, message: 'Room not found' });
+    }
+    
+    // Sprawdź czy gracz jest właścicielem - jeśli tak, zablokuj wyjście przez leave_game
+    const player = game.players.find(p => p.id === socket.id);
+    const isOwner = game.ownerId === socket.id || (player?.dbUserId && player.dbUserId === game.ownerId);
+    
+    if (isOwner) {
+      return callback?.({ 
+        success: false, 
+        message: 'Room owner cannot leave the room. Use "Destroy Room" instead.' 
+      });
+    }
+    
+    // Reszta kodu bez zmian...
+    const playerIndex = game.players.findIndex(p => p.id === socket.id);
+    if (playerIndex === -1) {
+      return callback?.({ success: false, message: 'Player not found in room' });
+    }
+    
+    // Usuń gracza z pokoju
+    const removedPlayer = game.players[playerIndex];
+    game.players.splice(playerIndex, 1);
+    
+    // Opuść pokój Socket.IO
+    socket.leave(roomId);
+    socket.roomId = null;
+    
+    // Powiadom innych graczy
+    io.to(roomId).emit('new_chat_message', { 
+      user: 'System', 
+      text: `${removedPlayer.username} has left the game.`
+    });
+    
+    // Aktualizuj listę graczy
+    io.to(roomId).emit('update_game', { 
+      players: game.players, 
+      drawerId: game.drawerId, 
+      drawingPaths: game.drawingPaths 
+    });
+    
+    // Jeśli opuszczający jest rysującym, obsłuż to specjalnie
+    if (game.drawerId === removedPlayer.id && game.gameStatus === 'playing') {
+      endRound(roomId, "drawer_left");
+    }
+    
+    // Sprawdź czy został tylko jeden gracz
+    if (game.players.length === 1) {
+      handleSinglePlayerRoom(roomId);
+    }
+    
+    // Jeśli pokój jest pusty, usuń go
+    else if (game.players.length === 0) {
+      console.log(`Room ${roomId} is empty after player left. Cleaning up.`);
+      await deleteRoomFromDatabase(roomId);
+      delete games[roomId];
+    }
+    
+    callback?.({ success: true });
+  } catch (error) {
+    console.error(`Error leaving room ${roomId}:`, error);
+    callback?.({ success: false, message: 'Failed to leave room' });
+  }
+});
 });
 
 app.get("/api/ping", (req, res) => {
@@ -759,4 +853,50 @@ app.post('/admin/disconnect-all', (req, res) => {
 
 const PORT = 4000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+function handleSinglePlayerRoom(roomId) {
+  const game = games[roomId];
+  if (!game || game.players.length !== 1) return;
+  
+  const lastPlayer = game.players[0];
+  
+  // Jeśli gra jest w trakcie, przerwij ją
+  if (game.gameStatus === 'playing') {
+    if (game.roundTimer) clearTimeout(game.roundTimer);
+    game.gameStatus = 'waiting';
+  }
+  
+  // Powiadom gracza, że został sam
+  io.to(lastPlayer.id).emit('new_chat_message', { 
+    user: 'System', 
+    text: `You are the only player left. The room will be closed in 60 seconds if no one joins.`,
+    type: 'warning'
+  });
+  
+  // Ustaw flagę i timer
+  if (game.singlePlayerTimer) clearTimeout(game.singlePlayerTimer);
+  
+  game.singlePlayerTimer = setTimeout(async () => {
+    // Sprawdź czy nadal jest tylko jeden gracz
+    if (game.players.length === 1) {
+      io.to(lastPlayer.id).emit('new_chat_message', { 
+        user: 'System', 
+        text: `Room is closing due to inactivity. You will be redirected to the home page.`,
+        type: 'system'
+      });
+      
+      // ZMIANA: Używamy istniejącego wydarzenia room_destroyed zamiast tworzyć nowe
+      io.to(roomId).emit('room_destroyed');
+      
+      // Rozłącz ostatniego gracza
+      const socket = Array.from(io.sockets.sockets.values())
+        .find(s => s.id === lastPlayer.id);
+      if (socket) socket.disconnect(true);
+      
+      // Usuń pokój
+      await deleteRoomFromDatabase(roomId);
+      delete games[roomId];
+    }
+  }, 60000); // 60 sekund
+}
 

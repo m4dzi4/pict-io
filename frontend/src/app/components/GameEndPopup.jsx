@@ -2,10 +2,11 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import styles from './GameEndPopup.module.css';
 
-const GameEndPopup = ({ winner, scores, gameStats, socket, roomId, isRoomOwner }) => {
+const GameEndPopup = ({ winner, scores, gameStats, socket, roomId }) => {
   const router = useRouter();
 
   const handleReturnHome = () => {
+    // Po prostu przekieruj na stronę główną - endGame już zajmuje się resztą
     router.push('/');
   };
 
@@ -23,12 +24,22 @@ const GameEndPopup = ({ winner, scores, gameStats, socket, roomId, isRoomOwner }
           <p>Time: {Math.floor(gameStats.totalTime / 60000)} min {Math.floor((gameStats.totalTime % 60000) / 1000)} sek</p>
         </div>
         
+        <h3>Final Scores:</h3>
+        <div className={styles.scoresTable}>
+          {Object.entries(scores).map(([playerId, score]) => (
+            <div key={playerId} className={styles.scoreRow}>
+              <span>{playerId === winner.id ? '👑 ' : ''}{playerId}</span>
+              <span>{score} points</span>
+            </div>
+          ))}
+        </div>
+        
         <div className={styles.buttonContainer}>
           <button 
             onClick={handleReturnHome}
             className={styles.homeButton}
           >
-            Go to main page
+            Return to Home
           </button>
         </div>
       </div>

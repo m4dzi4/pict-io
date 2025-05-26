@@ -454,6 +454,29 @@ const handleDestroyRoom = () => {
   }
 };
 
+    const handleLeaveGame = () => {
+        if (window.confirm('Are you sure you want to leave this game?')) {
+          if (socketRef.current && socketRef.current.connected && roomId) {
+            socketRef.current.emit('leave_game', { roomId }, (response) => {
+              if (response && response.success) {
+                console.log('Successfully left game');
+                router.push('/');
+              } else {
+                const errorMsg = response?.message || 'Unknown error';
+                alert('Failed to leave game: ' + errorMsg);
+                
+                // Jeśli próbujemy wyjść jako owner, zasugeruj użycie Destroy Room
+                if (errorMsg.includes('owner cannot leave')) {
+                  alert('As the room owner, please use "Destroy Room" button to close the room.');
+                }
+              }
+            });
+          } else {
+            router.push('/');
+          }
+        }
+      };
+
     // JSX
     if (!roomId) return <div className="flex justify-center items-center h-screen">Loading room ID...</div>;
     
@@ -501,21 +524,42 @@ const handleDestroyRoom = () => {
                     {/* Pierwsza linia: Room info + Destroy button */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                         <div>Room: {game.roomId}, Owner: {game.ownerUsername}</div>
-                        {isRoomOwner && (
-                            <button 
+                        <div>
+                            {/* Przycisk "Leave Game" tylko dla graczy, którzy NIE są właścicielami */}
+                            {!isRoomOwner && (
+                              <button 
+                                onClick={handleLeaveGame}
+                                style={{ 
+                                  marginRight: '8px',
+                                  background: '#f0ad4e', 
+                                  color: 'white', 
+                                  border: 'none', 
+                                  padding: '5px 10px', 
+                                  borderRadius: '4px',
+                                  fontSize: '14px'
+                                }}
+                              >
+                                Leave Game
+                              </button>
+                            )}
+                            
+                            {/* Przycisk "Destroy Room" tylko dla właściciela */}
+                            {isRoomOwner && (
+                              <button 
                                 onClick={handleDestroyRoom}
                                 style={{ 
-                                    background: '#ff4d4d', 
-                                    color: 'white', 
-                                    border: 'none', 
-                                    padding: '5px 10px', 
-                                    borderRadius: '4px',
-                                    fontSize: '14px'
+                                  background: '#ff4d4d', 
+                                  color: 'white', 
+                                  border: 'none', 
+                                  padding: '5px 10px', 
+                                  borderRadius: '4px',
+                                  fontSize: '14px'
                                 }}
-                            >
+                              >
                                 Destroy Room
-                            </button>
-                        )}
+                              </button>
+                            )}
+                        </div>
                     </div>
                     
                     {/* Druga linia: Start Game button (jeśli potrzebny) */}
