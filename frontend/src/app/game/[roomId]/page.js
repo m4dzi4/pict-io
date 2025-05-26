@@ -156,24 +156,30 @@ export default function GamePage() {
         setGameEndData(data);
     });
 
-    // Cleanup all event listeners and disconnect socket
-    return () => {
-        newSocket.off('game_started');
-        newSocket.off('update_game');
-        newSocket.off('end_round');
-        newSocket.off('new_round');
-        newSocket.off('new_keyword');
-        newSocket.off('new_chat_message');
-        newSocket.off('update_guessed');
-        newSocket.off('drawing_data_broadcast');
-        newSocket.off('game_ended');
-        
-        if (socketRef.current) {
-            socketRef.current.disconnect();
-            socketRef.current = null;
-            setCurrentSocketId(null);
+    newSocket.on('room_destroyed', () => {
+        alert('The room owner has closed this room. You will be redirected to the home page.');
+        router.push('/');
+    });
+
+        // Cleanup all event listeners and disconnect socket
+        return () => {
+            newSocket.off('game_started');
+            newSocket.off('update_game');
+            newSocket.off('end_round');
+            newSocket.off('new_round');
+            newSocket.off('new_keyword');
+            newSocket.off('new_chat_message');
+            newSocket.off('update_guessed');
+            newSocket.off('drawing_data_broadcast');
+            newSocket.off('game_ended');
+            newSocket.off('room_destroyed');
+            
+            if (socketRef.current) {
+                socketRef.current.disconnect();
+                socketRef.current = null;
+                setCurrentSocketId(null);
+            }
         }
-    }
 }, [params.roomId]); // Only re-run if roomId changes or on mount/unmount
 
     // Local timer for countdown display
@@ -430,6 +436,23 @@ export default function GamePage() {
         }
     };
 
+// Add this function with your other handler functions in GamePage component
+const handleDestroyRoom = () => {
+  if (window.confirm('Are you sure you want to destroy this room? All players will be disconnected.')) {
+    if (socketRef.current && socketRef.current.connected && roomId) {
+      socketRef.current.emit('destroy_room', { roomId }, (response) => {
+        if (response && response.success) {
+          console.log('Room successfully destroyed');
+          router.push('/');
+        } else {
+          alert('Failed to destroy room: ' + (response?.message || 'Unknown error'));
+        }
+      });
+    } else {
+      alert('Not connected to the server. Please try again.');
+    }
+  }
+};
 
     // JSX
     if (!roomId) return <div className="flex justify-center items-center h-screen">Loading room ID...</div>;
@@ -475,15 +498,33 @@ export default function GamePage() {
             <div style={{ flex: 2, display: 'flex', flexDirection: 'column', background: '#fff', border: '1px solid #ccc', borderRadius: 4, padding: 8, minWidth: 0 }}>
                 {/* Room and Status */}
                 <div style={{ marginBottom: 8 }}>
-                    <div>Room: {game.roomId}, Owner: {game.ownerUsername} </div>
-                    {/* <div> 
-                        {gameStatus === 'waiting' && (<span>Wait for game start.</span>)}
-                    </div> */}
+                    {/* Pierwsza linia: Room info + Destroy button */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                        <div>Room: {game.roomId}, Owner: {game.ownerUsername}</div>
+                        {isRoomOwner && (
+                            <button 
+                                onClick={handleDestroyRoom}
+                                style={{ 
+                                    background: '#ff4d4d', 
+                                    color: 'white', 
+                                    border: 'none', 
+                                    padding: '5px 10px', 
+                                    borderRadius: '4px',
+                                    fontSize: '14px'
+                                }}
+                            >
+                                Destroy Room
+                            </button>
+                        )}
+                    </div>
+                    
+                    {/* Druga linia: Start Game button (jeśli potrzebny) */}
                     <div>
                         {isRoomOwner && game.players.length >= 2 && canStartGame && (
                             <button onClick={handleStartGame}>Start Game</button>
                         )}
                     </div>
+                    
                     <div>
                         {game.gameStatus === 'playing' ? (
                             isDrawer ? (

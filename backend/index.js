@@ -700,7 +700,47 @@ socket.on("disconnect", async () => {
     }
   });
 
-  // [Other event handlers...]
+  socket.on('destroy_room', async ({ roomId }, callback) => {
+    try {
+      console.log(`User ${socket.id} attempting to destroy room ${roomId}`);
+      
+      const game = games[roomId];
+      if (!game) {
+        return callback?.({ success: false, message: 'Room not found' });
+      }
+      
+      // Sprawdź, czy socket należy do właściciela
+      const isOwner = game.ownerId === socket.id;
+      const player = game.players.find(p => p.id === socket.id);
+      const isLoggedInOwner = player && player.dbUserId && player.dbUserId === game.ownerId;
+      
+      if (!isOwner && !isLoggedInOwner) {
+        return callback?.({ success: false, message: 'Only room owner can destroy the room' });
+      }
+      
+      // Powiadom wszystkich graczy o zniszczeniu pokoju
+      io.to(roomId).emit('new_chat_message', { 
+        user: 'System', 
+        text: `Room owner has closed the room. All players will be disconnected.`,
+        type: 'system'
+      });
+      
+      // Wyślij zdarzenie do frontendu o zniszczeniu pokoju
+      io.to(roomId).emit('room_destroyed');
+      
+      await disconnectRoomSockets(roomId);
+      
+      await deleteRoomFromDatabase(roomId);
+      
+      // Usuń pokój z pamięci
+      delete games[roomId];
+      
+      callback?.({ success: true });
+    } catch (error) {
+      console.error(`Error destroying room ${roomId}:`, error);
+      callback?.({ success: false, message: 'Failed to destroy room' });
+    }
+  });
 });
 
 app.get("/api/ping", (req, res) => {
