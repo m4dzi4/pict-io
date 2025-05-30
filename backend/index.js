@@ -41,6 +41,7 @@ const JWT_SECRET = process.env.JWT_SECRET
 // TODO: should be handled as a call to the database
 //const KEYWORDS_LIST = ["apple", "banana", "car", "house", "tree", "sun", "moon", "star", "book", "clock", "river", "mountain", "bridge", "flower", "fish"];
 let games = {}; // roomID : game object
+let roomsBeingDeleted = new Set(); // Rooms currently being deleted
 
 async function generateRoomId() {
   let newRoomId;
@@ -130,8 +131,28 @@ async function markRoomInactive(roomId) {
 
 // Helper function to remove a room from the database
 async function deleteRoomFromDatabase(roomId) {
+  // Sprawdź czy pokój jest już w trakcie usuwania
+  if (roomsBeingDeleted.has(roomId)) {
+    console.log(`Room ${roomId} is already being deleted, skipping.`);
+    return true;
+  }
+  
+  // Oznacz pokój jako "w trakcie usuwania"
+  roomsBeingDeleted.add(roomId);
+  
   try {
-    // Delete the room record from the database
+    // Najpierw sprawdź czy pokój istnieje
+    const roomExists = await prisma.room.findUnique({
+      where: { roomId }
+    });
+    
+    // Jeśli pokój nie istnieje, zaloguj to i zwróć sukces
+    if (!roomExists) {
+      console.log(`Room ${roomId} not found in database, no need to delete.`);
+      return true;
+    }
+    
+    // Usuń pokój z bazy danych
     await prisma.room.delete({
       where: { roomId }
     });
@@ -140,6 +161,9 @@ async function deleteRoomFromDatabase(roomId) {
   } catch (error) {
     console.error(`Error deleting room ${roomId} from database:`, error);
     return false;
+  } finally {
+    // Zawsze usuń z seta po zakończeniu
+    roomsBeingDeleted.delete(roomId);
   }
 }
 
@@ -305,12 +329,13 @@ app.get('/api/rooms/validate/:roomId', async (req, res) => {
 // 1. Update getPublicGameState to handle undefined game
 function getPublicGameState(game) {
     if (!game) {
-        return null; // Or return a default structure
+        return null;
     }
     
     return {
         roomId: game.roomId,
         ownerId: game.ownerId,
+        ownerUsername: game.ownerUsername, // Dodaj tę linię
         maxPlayers: game.maxPlayers,
         accessCode: game.accessCode,
         gameMode: game.gameMode,
@@ -480,7 +505,10 @@ io.on("connection", (socket) => {
 
   function endRound(roomId, reason = "timer", senderId) {
     const game = games[roomId];
-    if (!game) return;
+    if (!game) {
+      console.log(`Cannot end round: Room ${roomId} no longer exists`);
+      return;
+    }
 
     // Clear the round timer if it exists
     if (game.roundTimer) {
@@ -508,7 +536,10 @@ io.on("connection", (socket) => {
 
   function endGame(roomId, currentRound = null) {
     const game = games[roomId];
-    if (!game) return;
+    if (!game) {
+      console.log(`Cannot end game: Room ${roomId} no longer exists`);
+      return;
+    }
 
     const roundToReport = currentRound || game.currentRound;
     
@@ -630,6 +661,13 @@ io.on("connection", (socket) => {
    
   async function startNewRound(roomId) {
     const game = games[roomId];
+    
+    // Sprawdź czy pokój istnieje
+    if (!game) {
+      console.log(`Cannot start new round: Room ${roomId} no longer exists`);
+      return;  // Wyjdź z funkcji jeśli pokój nie istnieje
+    }
+    
     game.drawingPaths = [];
     game.currentRound += 1;
     game.drawerId = getDrawer(roomId);
@@ -681,21 +719,25 @@ socket.on("disconnect", async () => {
         return;
     }
     
+    // Usuń gracza z listy (bez zmian)
     const playerIndex = game.players.findIndex(p => p.id === socket.id);
     
     if (playerIndex !== -1) {
         const removedPlayer = game.players.splice(playerIndex, 1)[0];
+        
+        // Powiadom pozostałych graczy (bez zmian)
         io.to(roomId).emit('new_chat_message', { 
             user: 'System', 
             text: `${removedPlayer.username} has disconnected.` 
         });
+        
         io.to(roomId).emit('update_game', { 
             players: game.players, 
             drawerId: game.drawerId, 
             drawingPaths: game.drawingPaths 
         });
         
-        // Handle drawer disconnection
+        // Obsługa rysującego (bez zmian)
         if (game.drawerId === removedPlayer.id) {
             console.log(`Drawer ${removedPlayer.username} disconnected`);
             if (game.gameStatus === 'playing') {
@@ -703,14 +745,19 @@ socket.on("disconnect", async () => {
             }
         }
         
+        // DODAJ SPRAWDZENIE FLAGI - nie wykonuj dodatkowych operacji jeśli pokój jest właśnie niszczony
+        if (game.being_destroyed) {
+            console.log(`Room ${roomId} is being destroyed, skipping cleanup in disconnect handler.`);
+            return;
+        }
+        
         // Sprawdź czy został tylko jeden gracz
         if (game.players.length === 1) {
             handleSinglePlayerRoom(roomId);
         }
-        // Check if room is empty
+        // Sprawdź czy pokój jest pusty
         else if (game.players.length === 0) {
             console.log(`Room ${roomId} is empty. Cleaning up from database and memory.`);
-            
             await deleteRoomFromDatabase(roomId);
             delete games[roomId];
         }
@@ -720,46 +767,61 @@ socket.on("disconnect", async () => {
 });
 
   socket.on('destroy_room', async ({ roomId }, callback) => {
-    try {
-      console.log(`User ${socket.id} attempting to destroy room ${roomId}`);
-      
-      const game = games[roomId];
-      if (!game) {
-        return callback?.({ success: false, message: 'Room not found' });
-      }
-      
-      // Sprawdź, czy socket należy do właściciela
-      const isOwner = game.ownerId === socket.id;
-      const player = game.players.find(p => p.id === socket.id);
-      const isLoggedInOwner = player && player.dbUserId && player.dbUserId === game.ownerId;
-      
-      if (!isOwner && !isLoggedInOwner) {
-        return callback?.({ success: false, message: 'Only room owner can destroy the room' });
-      }
-      
-      // Powiadom wszystkich graczy o zniszczeniu pokoju
-      io.to(roomId).emit('new_chat_message', { 
-        user: 'System', 
-        text: `Room owner has closed the room. All players will be disconnected.`,
-        type: 'system'
-      });
-      
-      // Wyślij zdarzenie do frontendu o zniszczeniu pokoju
-      io.to(roomId).emit('room_destroyed');
-      
-      await disconnectRoomSockets(roomId);
-      
-      await deleteRoomFromDatabase(roomId);
-      
-      // Usuń pokój z pamięci
-      delete games[roomId];
-      
-      callback?.({ success: true });
-    } catch (error) {
-      console.error(`Error destroying room ${roomId}:`, error);
-      callback?.({ success: false, message: 'Failed to destroy room' });
+  try {
+    console.log(`User ${socket.id} attempting to destroy room ${roomId}`);
+    
+    const game = games[roomId];
+    if (!game) {
+      return callback?.({ success: false, message: 'Room not found' });
     }
-  });
+    
+    // Sprawdzenie, czy użytkownik jest właścicielem (bez zmian)
+    const isOwner = game.ownerId === socket.id;
+    const player = game.players.find(p => p.id === socket.id);
+    const isLoggedInOwner = player && player.dbUserId && player.dbUserId === game.ownerId;
+    
+    if (!isOwner && !isLoggedInOwner) {
+      return callback?.({ success: false, message: 'Only room owner can destroy the room' });
+    }
+    
+    // DODAJ FLAGĘ - oznacz pokój jako właśnie niszczony
+    game.being_destroyed = true;
+    
+    // ZATRZYMAJ WSZYSTKIE TIMERY
+    if (game.roundTimer) {
+      clearTimeout(game.roundTimer);
+      game.roundTimer = null;
+    }
+    
+    if (game.singlePlayerTimer) {
+      clearTimeout(game.singlePlayerTimer);
+      game.singlePlayerTimer = null;
+    }
+    
+    // Powiadomienia (bez zmian)
+    io.to(roomId).emit('new_chat_message', { 
+      user: 'System', 
+      text: `Room owner has closed the room. All players will be disconnected.`,
+      type: 'system'
+    });
+    
+    io.to(roomId).emit('room_destroyed');
+    
+    // Najpierw usuń pokój z bazy danych
+    await deleteRoomFromDatabase(roomId);
+    
+    // Teraz rozłącz sockety
+    await disconnectRoomSockets(roomId);
+    
+    // Usuń pokój z pamięci
+    delete games[roomId];
+    
+    callback?.({ success: true });
+  } catch (error) {
+    console.error(`Error destroying room ${roomId}:`, error);
+    callback?.({ success: false, message: 'Failed to destroy room' });
+  }
+});
 
 // Handler dla zdarzenia 'leave_game'
 socket.on('leave_game', async ({ roomId }, callback) => {
@@ -896,5 +958,24 @@ function handleSinglePlayerRoom(roomId) {
       delete games[roomId];
     }
   }, 60000); // 60 sekund
+}
+
+// Najpierw szukaj po dbUserId
+const getOwnerUsername = () => {
+    // Najpierw szukaj po dbUserId
+    const ownerPlayer = game.players.find(p => p.dbUserId === game.ownerId);
+    
+    if (ownerPlayer) {
+        return ownerPlayer.username;
+    }
+    
+    // Jeśli nie znaleziono, szukaj po socket.id
+    const ownerBySocketId = game.players.find(p => p.id === game.ownerId);
+    if (ownerBySocketId) {
+        return ownerBySocketId.username;
+    }
+    
+    // Jeśli nadal nie znaleziono, pokaż ID właściciela lub domyślną wartość
+    return game.ownerUsername || "Unknown";
 }
 
