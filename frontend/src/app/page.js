@@ -292,7 +292,7 @@ export default function HomePage() {
           {newRoomSettings.isPrivate && (
             <div>
               <label>
-                Access Code (optional):
+                Access Code:
                 <input
                   type="text"
                   value={newRoomSettings.accessCode}

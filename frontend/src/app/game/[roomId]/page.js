@@ -112,7 +112,7 @@ export default function GamePage() {
             }
             setGame(prev => ({
                 ...prev,
-                drawingPaths: data.drawingPaths,
+                drawingPaths: [],
                 currentRound: data.currentRound,
                 drawerId: data.drawerId,
                 keyword: data.keyword,
@@ -245,7 +245,7 @@ export default function GamePage() {
                 attemptJoinRoom(socketRef.current, roomId, token, accessCodeInput);
             }
         }
-    }, [roomId, currentSocketId, joinedRoom, accessCodeInput, queryParams]);
+    }, [roomId, currentSocketId, joinedRoom, queryParams]);
 
     // OK
     const handleStartGame = () => {
@@ -310,7 +310,7 @@ export default function GamePage() {
         } else if (!accessCodeInput.trim()){
             alert("Please enter an access code.");
         } else {
-            alert("Not connected to server or room ID missing. Please wait or refresh.");
+            alert("Not connected to server or room ID miss  g. Please wait or refresh.");
         }
     };
     

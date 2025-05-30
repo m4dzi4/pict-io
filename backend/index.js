@@ -5,8 +5,6 @@ const { Server } = require('socket.io');
 const { PrismaClient } = require('./generated/prisma');
 const bcrypt = require('bcryptjs'); // Import bcryptjs
 const jwt = require('jsonwebtoken'); // Import jsonwebtoken
-const { realpathSync } = require('fs');
-const { send } = require('process');
 
 const app = express();
 app.use(cors());
@@ -21,15 +19,13 @@ const io = new Server(server, {
   }
 });
 
-// TODO : Fix the logic where during the downtime between the rounds, the previous drawer can draw still.
-// TODO : Fix the the logic where if the person guessing is not a guest, the guess is not sent properly.
-// TODO : Add the logic for game end and the statistics display. Also send the statistics to the database.
+// TODO : Send the statistics to the database.
 // TODO : Add the logic for the game round history to be saved in the database.
 // TODO : Change the keywords to be stored in the database and not hardcoded.
 // TODO : Add logic for only one person being in the room - check if only one person, notify them, give them some time to leave, or others to join and then delete the room
 // TODO : Fix logic, where if the game ends, the game is deleted from the database and memory, as well as remove all sockets from the room.
 // TODO : Change logic to use only the database for the rooms and not the memory ???
-// TODO : Fix private room logic - fix the acccess code logic.
+// TODO : Fix private room logic - fix the acccess code logic during creation and access
 // TODO : Add leaderboard logic - add the leaderboard to the database and show it in the game.
 // TODO : Fix room creation logic - check all options are working correctly.
 // TODO : Add logged in user statistics display + retrieval from the database.
@@ -366,9 +362,10 @@ io.on("connection", (socket) => {
         }
         
         const publicGameState = getPublicGameState(game);
+        const isRoomOwner = isAuthenticated && joiningUserId === game.ownerId;
         
         // If room is private, check access code (even if validated via HTTP, double check here)
-        if (game.accessCode && game.accessCode !== providedAccessCode) {
+        if (game.accessCode && !isRoomOwner && game.accessCode !== providedAccessCode) {
             return callback({ success: false, message: 'Invalid access code for private room.' });
         }
 
@@ -597,8 +594,8 @@ io.on("connection", (socket) => {
           type: 'correct_guess'
       });
 
-      // 2. Notify all others (including drawer) - FIXED: using io instead of socket
-      io.to(roomId).emit('new_chat_message', { 
+      // 2. Notify all others (including drawer) but not the guesser
+      socket.broadcast.to(roomId).emit('new_chat_message', { 
           user: 'System', 
           text: `${guesser ? guesser.username : 'Someone'} has guessed the word!`,
           type: 'other_correct'
@@ -849,6 +846,7 @@ app.post('/admin/disconnect-all', (req, res) => {
     res.send('All sockets disconnected.');
     // Dodaj obsługę zdarzenia destroy_room
   });
+  // curl -X POST http://localhost:4000/admin/disconnect-all
  
 
 const PORT = 4000;
