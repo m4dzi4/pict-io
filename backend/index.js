@@ -571,7 +571,7 @@ io.on("connection", (socket) => {
     delete games[roomId];
     
     // Oznacz pokój jako nieaktywny w bazie danych
-   await deleteRoomFromDatabase(roomId);
+    await deleteRoomFromDatabase(roomId);
   }, 10000); // 10 sekund na wyświetlenie wyników
     
 }

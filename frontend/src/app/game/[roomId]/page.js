@@ -30,6 +30,7 @@ export default function GamePage() {
     const [roomId, setRoomId] = useState(null);
     const [isDrawer, setIsDrawer] = useState(false);
     const [isRoomOwner, setIsRoomOwner] = useState(false);
+    const [roomOwner, setRoomOwner] = useState(null);
     const isDrawerRef = useRef(isDrawer); // Ref to hold the latest isDrawer state for callbacks
     const [loggedInUser, setLoggedInUser] = useState(null);
     const [accessCodeInput, setAccessCodeInput] = useState('');
@@ -228,6 +229,7 @@ export default function GamePage() {
                 const decoded = jwtDecode(token);
                 setLoggedInUser({ username: decoded.username, userId: decoded.userId });
                 (decoded.userId === game.ownerId) ? setIsRoomOwner(true) : setIsRoomOwner(false);
+  
             } catch (e) { console.error("Failed to decode token on game page", e); localStorage.removeItem('jwtToken'); }
         }
 
@@ -313,39 +315,6 @@ export default function GamePage() {
             alert("Not connected to server or room ID miss  g. Please wait or refresh.");
         }
     };
-    
-    // Not used anymore.
-    // OK
-    // const debouncedSendDrawing = useCallback(
-    //     debounce(async (pathsToEmit) => {
-    //         if (isDrawerRef.current && roomId && socketRef.current && socketRef.current.connected) {
-    //             const paths = pathsToEmit;
-
-    //             if (Array.isArray(paths)) { // Changed condition to handle both empty and non-empty arrays
-    //                 socketRef.current.emit('drawing_update', { roomId, paths });
-    //             } else {
-    //                 console.error("[Debounce] Paths from onChange is not a valid array. Not emitting. Paths value:", paths);
-    //             }
-    //         } else {
-    //             console.error("[Debounce] Conditions not met for emitting drawing_update (drawer, roomId, socket).");
-    //         }
-    //     }, 0),
-    //     [roomId]
-    // );
-
-
-    // // OK
-    // function debounce(func, delay) {
-    //     let timeout;
-    //     return function executedFunction(...args) {
-    //         const later = () => {
-    //             clearTimeout(timeout);
-    //             func(...args);
-    //         };
-    //         clearTimeout(timeout);
-    //         timeout = setTimeout(later, delay);
-    //     };
-    // }
 
     // OK
     const sendDrawing = (pathsToEmit) => {
@@ -476,6 +445,11 @@ const handleDestroyRoom = () => {
           }
         }
       };
+    
+        const getOwnerUsername = () => {
+            const ownerPlayer = game.players.find(p => p.dbUserId === game.ownerId);
+            return ownerPlayer ? ownerPlayer.username : 'Unknown';
+        };
 
     // JSX
     if (!roomId) return <div className="flex justify-center items-center h-screen">Loading room ID...</div>;
@@ -519,11 +493,11 @@ const handleDestroyRoom = () => {
         <div style={{ display: 'flex', height: '100vh', gap: '8px', background: '#eee', padding: '8px', boxSizing: 'border-box' }}>
             {/* Left: Canvas Area (2/3) */}
             <div style={{ flex: 2, display: 'flex', flexDirection: 'column', background: '#fff', border: '1px solid #ccc', borderRadius: 4, padding: 8, minWidth: 0 }}>
-                {/* Room and Status */}
+                {/* Room and Status */} 
                 <div style={{ marginBottom: 8 }}>
                     {/* Pierwsza linia: Room info + Destroy button */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                        <div>Room: {game.roomId}, Owner: {game.ownerUsername}</div>
+                        <div>Room: {game.roomId}, Owner: {getOwnerUsername()}</div>
                         <div>
                             {/* Przycisk "Leave Game" tylko dla graczy, którzy NIE są właścicielami */}
                             {!isRoomOwner && (
