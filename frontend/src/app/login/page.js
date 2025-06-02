@@ -1,8 +1,8 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { signIn, useSession } from 'next-auth/react'; // Add useSession import
 import Link from 'next/link';
-import { jwtDecode } from 'jwt-decode'; // If you need to decode for immediate use
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
@@ -10,18 +10,48 @@ export default function LoginPage() {
   const [message, setMessage] = useState('');
   const router = useRouter();
   const searchParams = useSearchParams();
+  
+  // Add the useSession hook
+  const { data: session, status } = useSession();
 
   useEffect(() => {
     if (searchParams.get('registered') === 'true') {
       setMessage('Registration successful! Please log in.');
     }
     if (searchParams.get('redirect')) {
-        setMessage('Please log in to continue.');
+      setMessage('Please log in to continue.');
     }
-    if (localStorage.getItem('jwtToken')) { // If already logged in, redirect
-        router.push('/');
+    
+    // Check if already logged in
+    const checkAuth = async () => {
+      // Don't proceed if NextAuth is still loading
+      if (status === 'loading') return;
+      
+      const jwtToken = localStorage.getItem('jwtToken');
+      
+      if (session || jwtToken) {
+        console.log('User is logged in, redirecting...');
+        const redirectUrl = searchParams.get('redirect') || '/';
+        router.push(redirectUrl);
+      }
+    };
+    
+    checkAuth();
+  }, [searchParams, router, session, status]); // Add session and status as dependencies
+
+  // Handle successful Google sign-in
+  useEffect(() => {
+    if (session && session.user) {
+      console.log('Google sign-in successful:', session.user);
+      setMessage('Google sign-in successful! Redirecting...');
+      
+      // Trigger auth change event for other components
+      window.dispatchEvent(new CustomEvent('authChange'));
+      
+      const redirectUrl = searchParams.get('redirect') || '/';
+      router.push(redirectUrl);
     }
-  }, [searchParams, router]);
+  }, [session, router, searchParams]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -41,10 +71,7 @@ export default function LoginPage() {
       setMessage(data.message);
       if (data.success && data.token) {
         localStorage.setItem('jwtToken', data.token);
-        // Optionally decode for immediate use or let TopBar handle it
-        // const decoded = jwtDecode(data.token);
-        // console.log('Logged in user:', decoded.username);
-        window.dispatchEvent(new CustomEvent('authChange')); // Notify TopBar/Layout
+        window.dispatchEvent(new CustomEvent('authChange'));
         const redirectUrl = searchParams.get('redirect') || '/';
         router.push(redirectUrl);
       }
@@ -54,52 +81,73 @@ export default function LoginPage() {
     }
   };
 
- 
+  const handleGoogleSignIn = async () => {
+    try {
+      setMessage('Signing in with Google...');
+      const redirectUrl = searchParams.get('redirect') || '/';
+      const result = await signIn('google', { 
+        callbackUrl: redirectUrl,
+        redirect: true 
+      });
+      
+      if (result?.error) {
+        console.error('Google sign-in error:', result.error);
+        setMessage('Google sign-in failed. Please try again.');
+      }
+    } catch (error) {
+      console.error('Google sign-in error:', error);
+      setMessage('Google sign-in failed. Please try again.');
+    }
+  };
+
+  // Show loading state while NextAuth is loading
+  if (status === 'loading') {
+    return <div>Loading...</div>;
+  }
+
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen py-2 bg-gray-100">
-      <div className="p-8 bg-white rounded-lg shadow-xl w-full max-w-md text-black">
-        <h1 className="text-3xl font-bold mb-6 text-center text-gray-800">Login</h1>
+    <div>
+      <div>
+        <h1>Login</h1>
+        
+        <button onClick={handleGoogleSignIn}>
+          Sign in with Google
+        </button>
+
+        <p>or</p>
+
         <form onSubmit={handleLogin}>
           <div className="mb-4">
-            <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+            <label htmlFor="username">Username</label>
             <input
               type="text"
               id="username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="Enter your username"
-              className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
               required
             />
           </div>
           <div className="mb-6">
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+            <label htmlFor="password">Password</label>
             <input
               type="password"
               id="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter your password"
-              className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
               required
             />
           </div>
-          <button
-            type="submit"
-            className="w-full py-3 bg-purple-600 text-white rounded-lg text-lg font-semibold hover:bg-purple-700 transition-colors duration-150"
-          >
+          <button type="submit">
             Login
           </button>
         </form>
-        {message && (
-          <p className={`mt-4 text-center text-sm ${message.includes('successful') ? 'text-green-600' : (message.includes('required') || message.includes('failed') || message.includes('Invalid') ? 'text-red-600' : 'text-gray-700') }`}>
-            {message}
-          </p>
-        )}
-        <p className="mt-6 text-center text-sm text-gray-600">
-          <Link href="/register" className="text-purple-600 hover:text-purple-800 font-medium">
-            Register here
-          </Link>
+
+        {message && <p>{message}</p>}
+        
+        <p>
+          <Link href="/register">Register here</Link>
         </p>
       </div>
     </div>

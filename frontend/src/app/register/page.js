@@ -42,31 +42,29 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen py-2 bg-gray-100">
-      <div className="p-8 bg-white rounded-lg shadow-xl w-full max-w-md text-black">
-        <h1 className="text-3xl font-bold mb-6 text-center text-gray-800">Create Account</h1>
+    <div>
+      <div>
+        <h1>Create Account</h1>
         <form onSubmit={handleRegister}>
           <div className="mb-4">
-            <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+            <label htmlFor="username">Username</label>
             <input
               type="text"
               id="username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="Choose a username"
-              className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
               required
             />
           </div>
-          <div className="mb-6">
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+          <div>
+            <label htmlFor="password">Password</label>
             <input
               type="password"
               id="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Choose a password (min. 6 characters)"
-              className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
               required
             />
           </div>
@@ -78,13 +76,13 @@ export default function RegisterPage() {
           </button>
         </form>
         {message && (
-          <p className={`mt-4 text-center text-sm ${message.includes('successful') ? 'text-green-600' : 'text-red-600'}`}>
+          <p>
             {message}
           </p>
         )}
-        <p className="mt-6 text-center text-sm text-gray-600">
+        <p>
           Already have an account?{' '}
-          <Link href="/login" className="text-purple-600 hover:text-purple-800 font-medium">
+          <Link href="/login">
             Login here
           </Link>
         </p>

@@ -14,15 +14,20 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Updated User model for NextAuth compatibility
 model User {
-  id             String @id @default(cuid()) // Primary Key, unique CUID
-  username       String @unique // Unique username for login
-  hashedPassword String // Store the hashed password
+  id             String    @id @default(cuid())
+  username       String    @unique
+  hashedPassword String? // Make optional for OAuth users
+  name           String? // For NextAuth
+  email          String?   @unique // For NextAuth
+  emailVerified  DateTime? // For NextAuth
+  image          String? // For NextAuth
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  // Add the relation to Room model - this user can own multiple rooms
-  roomsOwned Room[]   @relation("RoomOwner")
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  // Your existing relations
+  roomsOwned Room[] @relation("RoomOwner")
 }
 
 model Room {
