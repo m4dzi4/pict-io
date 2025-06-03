@@ -126,8 +126,10 @@ exports.Prisma.UserScalarFieldEnum = {
   hashedPassword: 'hashedPassword',
   name: 'name',
   email: 'email',
-  emailVerified: 'emailVerified',
   image: 'image',
+  gamesPlayed: 'gamesPlayed',
+  gamesWon: 'gamesWon',
+  totalPoints: 'totalPoints',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -138,6 +140,7 @@ exports.Prisma.RoomScalarFieldEnum = {
   maxPlayers: 'maxPlayers',
   accessCode: 'accessCode',
   ownerId: 'ownerId',
+  ownerName: 'ownerName',
   gameMode: 'gameMode',
   maxRounds: 'maxRounds',
   pointsToWin: 'pointsToWin',

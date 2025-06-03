@@ -19,14 +19,6 @@ const io = new Server(server, {
 	},
 });
 
-// TODO : Send the statistics to the database.
-// TODO : Add the logic for the game round history to be saved in the database.
-// TODO : Change logic to use only the database for the rooms and not the memory ???
-// TODO : Add leaderboard logic - add the leaderboard to the database and show it in the game.
-// TODO : Fix room creation logic - check all options are working correctly.
-// TODO : Add logged in user statistics display + retrieval from the database.
-// TODO : Add a destroy room button - remove the room from the database and memory and removes all sockets from the room.
-// TODO : Add a join from a list of rooms - show the list of rooms and allow the user to join a room.
 // TODO : Add logic for the points for guessers and drawers.
 // TODO : Add frontend beuty
 // TODO : Dockerize the app
@@ -36,6 +28,68 @@ const JWT_SECRET = process.env.JWT_SECRET;
 //const KEYWORDS_LIST = ["apple", "banana", "car", "house", "tree", "sun", "moon", "star", "book", "clock", "river", "mountain", "bridge", "flower", "fish"];
 let games = {}; // roomID : game object
 let roomsBeingDeleted = new Set(); // Rooms currently being deleted
+const SCORING_CONFIG = {
+	// Base points for guessers by difficulty
+	GUESSER_POINTS: {
+		1: 1, // Easy
+		2: 3, // Medium
+		3: 5, // Hard
+		4: 7, // Very Hard
+		5: 9, // Expert
+	},
+
+	// Small bonus for first guessers
+	FIRST_GUESSER_BONUS: 0.5,
+
+	// Points for drawer based on word difficulty
+	DRAWER_POINTS: {
+		1: 0, // Easy
+		2: 1, // Medium
+		3: 2, // Hard
+		4: 3, // Very Hard
+		5: 4, // Expert
+	},
+
+	// Drawer bonus calculation
+	// If all players guess correctly, drawer gets this percentage bonus
+	ALL_GUESSED_BONUS_PERCENT: 10, // 10% bonus when everyone guesses correctly
+};
+
+// Add this function after the getPublicGameState function
+async function syncGameStatusToDatabase(roomId) {
+	const game = games[roomId];
+	if (!game) return false;
+
+	try {
+		// Convert in-memory game status to database status
+		let dbStatus = "active";
+
+		if (game.gameStatus === "playing" || game.gameStatus === "choosing_word") {
+			dbStatus = "playing";
+		} else if (game.gameStatus === "ended") {
+			dbStatus = "ended";
+		} else if (
+			game.gameStatus === "waiting" ||
+			game.gameStatus === "betweenRounds"
+		) {
+			dbStatus = "waiting";
+		}
+
+		await prisma.room.update({
+			where: { roomId },
+			data: {
+				status: dbStatus,
+				updatedAt: new Date(),
+			},
+		});
+
+		console.log(`Room ${roomId} status synced to database: ${dbStatus}`);
+		return true;
+	} catch (error) {
+		console.error(`Failed to sync room ${roomId} status to database:`, error);
+		return false;
+	}
+}
 
 async function generateRoomId() {
 	let newRoomId;
@@ -140,6 +194,364 @@ async function getRandomKeywords(count = 3) {
 	}
 }
 
+function endGame(roomId, currentRound = null) {
+	const game = games[roomId];
+	if (!game) {
+		console.log(`Cannot end game: Room ${roomId} no longer exists`);
+		return;
+	}
+
+	const roundToReport = currentRound || game.currentRound;
+
+	// Zatrzymaj timer rundy jeśli istnieje
+	if (game.roundTimer) {
+		clearTimeout(game.roundTimer);
+		game.roundTimer = null;
+	}
+
+	// Zmień status gry
+	game.gameStatus = "ended";
+
+	syncGameStatusToDatabase(roomId);
+
+	// Znajdź zwycięzcę (gracz z najwyższym wynikiem)
+	let highestScore = 0;
+	let winner = null;
+
+	Object.entries(game.scores).forEach(([playerId, score]) => {
+		if (score > highestScore) {
+			highestScore = score;
+			winner = playerId;
+		}
+	});
+
+	// Znajdź nazwę zwycięzcy
+	let winnerName = "Unknown";
+	if (winner) {
+		// Szukaj najpierw po socket.id, potem po dbUserId
+		const winnerPlayer = game.players.find(
+			(p) => p.id === winner || p.dbUserId === winner
+		);
+		if (winnerPlayer) {
+			winnerName = winnerPlayer.username;
+		}
+	}
+
+	// Wyślij wiadomość o końcu gry
+	io.to(roomId).emit("new_chat_message", {
+		user: "System",
+		text: `Game ended! Winner: ${winnerName}, score: ${highestScore} points.`,
+		type: "game_end",
+	});
+
+	broadcastRoomListUpdate();
+
+	// Transform the scores object to map from username to score
+	const formattedScores = {};
+
+	// Add player names to scores and update statistics for authenticated users
+	const statisticsPromises = [];
+
+	Object.entries(game.scores).forEach(([playerId, score]) => {
+		// Find the player by ID (either socket.id or dbUserId)
+		const player = game.players.find(
+			(p) => p.id === playerId || p.dbUserId === playerId
+		);
+
+		if (player) {
+			// Use the player's username as the key
+			formattedScores[player.username] = score;
+
+			// If this is an authenticated user, update their statistics
+			if (player.dbUserId) {
+				const isWinner = player.dbUserId === winner || player.id === winner;
+				statisticsPromises.push(
+					updateUserStatistics(player.dbUserId, score, isWinner)
+				);
+			}
+		} else {
+			// Fallback for players who may have left
+			formattedScores[`Player-${playerId.substring(0, 4)}`] = score;
+		}
+	});
+
+	// Wait for all statistics updates to complete
+	Promise.all(statisticsPromises)
+		.then(() =>
+			console.log(
+				`Statistics updated for ${statisticsPromises.length} players in room ${roomId}`
+			)
+		)
+		.catch((err) => console.error("Error updating some user statistics:", err));
+
+	// Wyślij event o końcu gry z końcowymi wynikami
+	io.to(roomId).emit("game_ended", {
+		scores: formattedScores, // Use the formatted scores with usernames
+		rawScores: game.scores, // Also send raw scores for reference if needed
+		winner: {
+			id: winner,
+			name: winnerName,
+			score: highestScore,
+		},
+		gameStats: {
+			rounds: roundToReport,
+			totalTime: Date.now() - game.startTime,
+		},
+	});
+	setTimeout(async () => {
+		// Rozłącz wszystkie sockety w pokoju
+		await disconnectRoomSockets(roomId);
+
+		// Usuń pokój z pamięci
+		delete games[roomId];
+
+		// Oznacz pokój jako nieaktywny w bazie danych
+		await deleteRoomFromDatabase(roomId);
+	}, 10000); // 10 sekund na wyświetlenie wyników
+}
+
+function endRound(roomId, reason = "timer", senderId) {
+	const game = games[roomId];
+	if (!game) {
+		console.log(`Cannot end round: Room ${roomId} no longer exists`);
+		return;
+	}
+
+	// Clear the round timer if it exists
+	if (game.roundTimer) {
+		clearTimeout(game.roundTimer);
+		game.roundTimer = null;
+	}
+
+	// Award drawer points if not already done and there were correct guesses
+	const currentRoundData = game.round_history[game.currentRound];
+	if (
+		!currentRoundData.drawerScore &&
+		currentRoundData.correct_guesses.length > 0
+	) {
+		awardDrawerPoints(roomId);
+	}
+
+	// Get word data for the summary
+	const wordData = game.wordChoices?.find((w) => w.word === game.keyword) || {
+		difficulty: 3,
+	};
+
+	// FIXED: Since correct_guesses now stores objects, count them properly
+	const correctGuessersCount = currentRoundData.correct_guesses.length;
+
+	io.to(roomId).emit("new_chat_message", {
+		user: "System",
+		text: `Round ${game.currentRound} ended! Word: "${game.keyword}" (Difficulty: ${wordData.difficulty}/5). ${correctGuessersCount} players guessed correctly.`,
+		type: "round_end",
+		roundSummary: {
+			word: game.keyword,
+			difficulty: wordData.difficulty,
+			correctGuessers: correctGuessersCount,
+			reason: reason,
+		},
+	});
+
+	// Create complete round summary for the end_round event
+	const roundSummary = {
+		word: game.keyword,
+		difficulty: wordData.difficulty,
+		correctGuessers: currentRoundData.correct_guesses || [],
+		drawerScore: currentRoundData.drawerScore || null,
+		scores: game.scores || {},
+		reason: reason,
+	};
+
+	io.to(roomId).emit("end_round", {
+		gameStatus: "betweenRounds",
+		roundSummary: roundSummary, // Make sure this is always defined
+	});
+
+	syncGameStatusToDatabase(roomId);
+
+	// Check if game should end
+	if (game.gameMode === "rounds" && game.currentRound >= game.maxRounds) {
+		endGame(roomId, game.currentRound);
+	} else {
+		// Start next round after a short delay
+		setTimeout(() => startNewRound(roomId), 8000);
+	}
+}
+
+function awardDrawerPoints(roomId) {
+	const game = games[roomId];
+	const currentRoundData = game.round_history[game.currentRound];
+	const wordData = game.wordChoices?.find((w) => w.word === game.keyword) || {
+		difficulty: 3,
+	};
+
+	// Find the drawer
+	const drawer = game.players.find((p) => p.id === game.drawerId);
+	if (!drawer) return;
+
+	// Calculate drawer points
+	const totalPlayers = game.players.length;
+	const correctGuessersCount = currentRoundData.correct_guesses.length;
+	const drawerPoints = calculateDrawerPoints(
+		wordData.difficulty,
+		totalPlayers,
+		correctGuessersCount
+	);
+
+	// Award points to drawer
+	const drawerScoreKey = drawer.dbUserId || drawer.id;
+	game.scores[drawerScoreKey] =
+		(game.scores[drawerScoreKey] || 0) + drawerPoints;
+
+	// Store drawer scoring info
+	currentRoundData.drawerScore = {
+		points: drawerPoints,
+		difficulty: wordData.difficulty,
+		correctGuessers: correctGuessersCount,
+		totalPlayers: totalPlayers,
+	};
+
+	// Notify drawer
+	io.to(game.drawerId).emit("new_chat_message", {
+		user: "System",
+		text: `Great drawing! You earned ${drawerPoints} points as the artist! 🎨`,
+		type: "drawer_score",
+		points: drawerPoints,
+	});
+
+	// Notify others
+	io.to(roomId).emit("new_chat_message", {
+		user: "System",
+		text: `${drawer.username} earned ${drawerPoints} points for their drawing!`,
+		type: "drawer_score_announcement",
+	});
+
+	// Update live scores
+	io.to(roomId).emit("score_update", {
+		scores: game.scores,
+		lastScorer: {
+			username: drawer.username,
+			points: drawerPoints,
+			total: game.scores[drawerScoreKey],
+			isDrawer: true,
+		},
+	});
+}
+
+// Add this function near the other helper functions
+async function updateUserStatistics(userId, points, isWinner) {
+	try {
+		// Fetch current user stats
+		const user = await prisma.user.findUnique({
+			where: { id: userId },
+			select: { gamesPlayed: true, gamesWon: true, totalPoints: true },
+		});
+
+		if (!user) {
+			console.log(`Cannot update statistics: User ${userId} not found`);
+			return false;
+		}
+
+		// Update user statistics
+		await prisma.user.update({
+			where: { id: userId },
+			data: {
+				gamesPlayed: { increment: 1 },
+				gamesWon: isWinner ? { increment: 1 } : undefined,
+				totalPoints: { increment: points },
+			},
+		});
+
+		console.log(
+			`Updated statistics for user ${userId}: +${points} points, winner: ${isWinner}`
+		);
+		return true;
+	} catch (error) {
+		console.error(`Error updating user statistics for ${userId}:`, error);
+		return false;
+	}
+}
+
+async function startNewRound(roomId) {
+	const game = games[roomId];
+
+	// Sprawdź czy pokój istnieje
+	if (!game) {
+		console.log(`Cannot start new round: Room ${roomId} no longer exists`);
+		return; // Wyjdź z funkcji jeśli pokój nie istnieje
+	}
+
+	game.drawingPaths = [];
+	game.currentRound += 1;
+	game.drawerId = getDrawer(roomId);
+	//game.keyword = await getRandomKeyword();
+	game.wordChoices = await getRandomKeywords(3);
+	game.keyword = null; // Will be set when drawer chooses
+	game.wordChoiceDeadline = Date.now() + 10000; // 10 seconds to choose
+	console.log(
+		`Starting new round ${game.currentRound} in room ${roomId}. Drawer: ${game.drawerId}, Keyword: ${game.keyword}`
+	);
+	game.round_history[game.currentRound] = {
+		drawerId: game.drawerId,
+		keyword: game.keyword,
+		correct_guesses: [], // socketIDs
+		all_guesses: {}, // socketId --> guess
+	};
+	// // Set round end time
+	// const roundDurationMs = game.roundDuration * 1000;
+	// game.roundEndTime = Date.now() + roundDurationMs;
+
+	// if (game.roundTimer) clearTimeout(game.roundTimer);
+	// game.roundTimer = setTimeout(() => endRound(roomId), roundDurationMs);
+
+	// // Emit new_round with roundEndTime - FIXED: removed duplicate currentRound
+	// io.to(roomId).emit("new_round", {
+	// 	drawingPaths: [],
+	// 	currentRound: game.currentRound,
+	// 	maxRounds: game.maxRounds,
+	// 	drawerId: game.drawerId,
+	// 	roundEndTime: game.roundEndTime,
+	// 	gameStatus: "playing",
+	// });
+
+	// io.to(game.drawerId).emit("new_keyword", { keyword: game.keyword });
+
+	// Set word choice timer (15 seconds)
+	if (game.wordChoiceTimer) clearTimeout(game.wordChoiceTimer);
+	game.wordChoiceTimer = setTimeout(() => {
+		// Auto-select first word if no choice made
+		if (!game.keyword && game.wordChoices && game.wordChoices.length > 0) {
+			selectWordForRound(roomId, game.wordChoices[0]);
+		}
+	}, 10000);
+
+	// Emit word choice event to drawer
+	io.to(game.drawerId).emit("choose_word", {
+		wordChoices: game.wordChoices,
+		deadline: game.wordChoiceDeadline,
+	});
+
+	// Emit round preparation to all players
+	io.to(roomId).emit("round_preparation", {
+		currentRound: game.currentRound,
+		maxRounds: game.maxRounds,
+		drawerId: game.drawerId,
+		gameStatus: "choosing_word",
+	});
+
+	await syncGameStatusToDatabase(roomId);
+
+	// Broadcast updated queue if using queue mode
+	if (game.drawerChoice === "queue" && game.drawerQueue) {
+		io.to(roomId).emit("drawer_queue_updated", {
+			drawerQueue: game.drawerQueue.map((p) => ({
+				username: p.username,
+				socketId: p.socketId,
+			})),
+		});
+	}
+}
+
 // New function to handle word selection
 function selectWordForRound(roomId, selectedWord) {
 	const game = games[roomId];
@@ -154,6 +566,10 @@ function selectWordForRound(roomId, selectedWord) {
 	// Set the chosen word
 	game.keyword = selectedWord.word;
 	game.round_history[game.currentRound].keyword = selectedWord.word;
+	game.round_history[game.currentRound].keyword = selectedWord.word;
+	game.round_history[game.currentRound].wordDifficulty =
+		selectedWord.difficulty;
+	game.round_history[game.currentRound].correct_guesses = []; // Reset to array of objects
 
 	// Set round end time (start the actual drawing round)
 	const roundDurationMs = game.roundDuration * 1000;
@@ -170,14 +586,54 @@ function selectWordForRound(roomId, selectedWord) {
 		drawerId: game.drawerId,
 		roundEndTime: game.roundEndTime,
 		gameStatus: "playing",
+		wordDifficulty: selectedWord.difficulty,
 	});
 
+	syncGameStatusToDatabase(roomId);
+
 	// Send the chosen keyword to the drawer
-	io.to(game.drawerId).emit("new_keyword", { keyword: game.keyword });
+	io.to(game.drawerId).emit("new_keyword", {
+		keyword: game.keyword,
+		difficulty: selectedWord.difficulty,
+		basePoints: SCORING_CONFIG.DRAWER_POINTS[selectedWord.difficulty],
+	});
 
 	console.log(
 		`Round ${game.currentRound} started with word: ${game.keyword} (difficulty: ${selectedWord.difficulty})`
 	);
+}
+
+// Helper function to calculate guesser points
+function calculateGuesserPoints(wordDifficulty, guessPosition) {
+	// Base points by difficulty
+	let points = SCORING_CONFIG.GUESSER_POINTS[wordDifficulty] || 3;
+
+	// Small bonus for first guesser only
+	if (guessPosition === 0) {
+		points += SCORING_CONFIG.FIRST_GUESSER_BONUS;
+	}
+
+	return points;
+}
+
+function calculateDrawerPoints(wordDifficulty, totalPlayers, correctGuessers) {
+	// Base points by difficulty
+	let points = SCORING_CONFIG.DRAWER_POINTS[wordDifficulty] || 4;
+
+	// Calculate percentage of players who guessed correctly
+	const eligibleGuessers = Math.max(totalPlayers - 1, 1); // Exclude drawer
+	const percentGuessedCorrectly = (correctGuessers / eligibleGuessers) * 100;
+
+	// Add bonus if all guessed correctly
+	if (correctGuessers === eligibleGuessers && eligibleGuessers > 0) {
+		// Add percentage bonus for all players guessing
+		const bonusPoints = Math.round(
+			points * (SCORING_CONFIG.ALL_GUESSED_BONUS_PERCENT / 100)
+		);
+		points += bonusPoints;
+	}
+
+	return points;
 }
 
 function getDrawer(roomId) {
@@ -205,18 +661,28 @@ function getDrawer(roomId) {
 			});
 			return nextDrawer.socketId;
 		} else if (game.drawerChoice === "winner") {
-			// The player that guessed first in the last round becomes the drawer
-			// round_history: {}, // { roundNumber: { drawerId, keyword, correct_guesses in order [player1, player2, player3], all_guesses {} } }
+			// FIXED: Handle the new object structure for correct_guesses
 			const lastRound = game.round_history[game.currentRound - 1];
 			if (
 				!lastRound ||
 				!lastRound.correct_guesses ||
 				lastRound.correct_guesses.length === 0
-			)
+			) {
 				return game.players[randomIndex].id;
-			const firstGuesserId = lastRound.correct_guesses[0];
+			}
+
+			// Since correct_guesses now stores objects, get the socketId from the first guess
+			const firstGuesser = lastRound.correct_guesses[0];
+			const firstGuesserId = firstGuesser.socketId || firstGuesser; // Fallback for backwards compatibility
+
 			let winnerPlayer = game.players.find((p) => p.id === firstGuesserId);
-			return winnerPlayer.id; // Always return the socket ID
+			if (!winnerPlayer) {
+				winnerPlayer = game.players.find(
+					(p) => p.dbUserId === firstGuesser.dbUserId
+				);
+			}
+
+			return winnerPlayer ? winnerPlayer.id : game.players[randomIndex].id; // always return socket id
 		} else {
 			// else random
 			return game.players[randomIndex].id;
@@ -441,9 +907,10 @@ app.post("/api/rooms/create", authenticateToken, async (req, res) => {
 						? settings.accessCode
 						: null,
 				ownerId: creatorDbId, // to track room ownership
+				ownerName: creatorUsername,
 				gameMode: settings?.gameMode || "rounds",
 				maxRounds: settings?.maxRounds || 5,
-				pointsToWin: settings?.pointsToWin || 3,
+				pointsToWin: settings?.pointsToWin || 100,
 				roundDuration: settings?.roundDuration || 60,
 				drawerChoice: settings?.drawerChoice || "random",
 			},
@@ -568,6 +1035,10 @@ function getPublicGameState(game) {
 	};
 }
 
+function broadcastRoomListUpdate() {
+	io.emit("room_list_updated");
+}
+
 // Socket.IO connection
 io.on("connection", (socket) => {
 	console.log("Socket connected:", socket.id);
@@ -677,6 +1148,18 @@ io.on("connection", (socket) => {
 					user: "System",
 					text: `${newPlayer.username} has connected.`,
 				});
+
+				broadcastRoomListUpdate();
+
+				// Update database with current timestamp
+				try {
+					await prisma.room.update({
+						where: { roomId },
+						data: { updatedAt: new Date() },
+					});
+				} catch (error) {
+					console.error(`Error updating room timestamp: ${error}`);
+				}
 			} catch (error) {
 				console.error(`Error in socket join_room for room ${roomId}:`, error);
 				callback({
@@ -698,6 +1181,118 @@ io.on("connection", (socket) => {
 		}
 	);
 
+	// If the guess is correct, update the game state and notify players
+	function correct_guess(
+		roomId,
+		socketId,
+		dbUserId = null,
+		isAuthenticated = false
+	) {
+		const game = games[roomId];
+		let guesser = game.players.find((p) => p.id === socketId);
+		// Get current round info
+		const currentRoundData = game.round_history[game.currentRound];
+		const wordData = game.wordChoices?.find((w) => w.word === game.keyword) || {
+			difficulty: 3,
+		};
+		const wordDifficulty = wordData.difficulty;
+
+		// Calculate time remaining percentage
+		const timeElapsed =
+			Date.now() - (game.roundEndTime - game.roundDuration * 1000);
+		const timeRemainingPercentage = Math.max(
+			0,
+			(game.roundEndTime - Date.now()) / (game.roundDuration * 1000)
+		);
+
+		// Determine guess position (0-indexed)
+		const guessPosition = currentRoundData.correct_guesses.length;
+
+		// Calculate points for the guesser
+		const guesserPoints = calculateGuesserPoints(wordDifficulty, guessPosition);
+
+		// Update guesser score
+		const scoreKey = isAuthenticated && dbUserId ? dbUserId : socketId;
+		game.scores[scoreKey] = (game.scores[scoreKey] || 0) + guesserPoints;
+
+		// Store scoring info for this guess
+		currentRoundData.correct_guesses.push({
+			socketId: socketId,
+			dbUserId: dbUserId,
+			username: guesser.username,
+			points: guesserPoints,
+			guessPosition: guessPosition,
+			timeRemaining: timeRemainingPercentage,
+			timestamp: Date.now(),
+		});
+
+		currentRoundData.all_guesses[socketId] = game.keyword;
+
+		// 1. Send personalized message to the guesser with points
+		io.to(socketId).emit("new_chat_message", {
+			user: "System",
+			text: `Correct! You guessed "${game.keyword}" and earned ${guesserPoints} points! 🎉`,
+			type: "correct_guess",
+			points: guesserPoints,
+		});
+
+		// 2. Notify others
+		socket.broadcast.to(roomId).emit("new_chat_message", {
+			user: "System",
+			text: `${guesser.username} guessed correctly and earned ${guesserPoints} points!`,
+			type: "other_correct",
+		});
+
+		// 3. Update guessed to disable chat for the guesser
+		io.to(socketId).emit("update_guessed");
+
+		// Update live scores for all players
+		io.to(roomId).emit("score_update", {
+			scores: game.scores,
+			lastScorer: {
+				username: guesser.username,
+				points: guesserPoints,
+				total: game.scores[scoreKey],
+			},
+		});
+
+		// 4. Check if that means end of the game
+		if (
+			game.gameMode === "points" &&
+			game.scores[scoreKey] >= game.pointsToWin
+		) {
+			endGame(roomId, scoreKey);
+		}
+
+		// 5. Check if all guessers have guessed correctly - FIXED logic
+		const allGuessers = game.players.filter((p) => p.id !== game.drawerId);
+		const correctGuessers =
+			game.round_history[game.currentRound].correct_guesses;
+
+		console.log(
+			`All guessers: ${allGuessers.map((p) => p.username).join(", ")}`
+		);
+		console.log(
+			`Correct guessers objects:`,
+			correctGuessers.map((g) => g.username)
+		);
+		console.log(`drawerId: ${game.drawerId}`);
+
+		// FIXED: Since correct_guesses now stores objects, compare with the socketId property
+		const allGuessedCorrectly = allGuessers.every((p) => {
+			return correctGuessers.some(
+				(guess) =>
+					guess.socketId === p.id ||
+					(p.dbUserId && guess.dbUserId === p.dbUserId)
+			);
+		});
+
+		if (allGuessers.length > 0 && allGuessedCorrectly) {
+			awardDrawerPoints(roomId);
+			endRound(roomId, "all_guessed");
+		}
+	}
+
 	socket.on("drawing_update", ({ roomId, paths }) => {
 		const game = games[roomId];
 		console.log(
@@ -715,6 +1310,7 @@ io.on("connection", (socket) => {
 
 	socket.on("join_drawer_queue", ({ roomId, token }, callback) => {
 		const game = games[roomId];
+		let playerId = socket.id; // FIXED: Declare playerId properly
 		let username = `Guest-${socket.id.substring(0, 4)}`;
 		if (token) {
 			const decoded = jwt.verify(token, JWT_SECRET);
@@ -753,7 +1349,7 @@ io.on("connection", (socket) => {
 			}
 			game.drawerQueue.push({
 				socketId: socket.id,
-				dbUserId: token ? playerId : null,
+				dbUserId: playerId,
 				username: username,
 			});
 
@@ -820,7 +1416,7 @@ io.on("connection", (socket) => {
 				text.toLowerCase().trim() === game.keyword.toLowerCase().trim()
 			) {
 				// Correct guess logic
-				game.round_history[game.currentRound].correct_guesses.push(senderId);
+				// game.round_history[game.currentRound].correct_guesses.push(senderId);
 				game.round_history[game.currentRound].all_guesses[senderId] = text;
 				correct_guess(roomId, senderId, senderDbId, isAuthenticated);
 			} else {
@@ -832,248 +1428,6 @@ io.on("connection", (socket) => {
 		}
 	});
 
-	function endRound(roomId, reason = "timer", senderId) {
-		const game = games[roomId];
-		if (!game) {
-			console.log(`Cannot end round: Room ${roomId} no longer exists`);
-			return;
-		}
-
-		// Clear the round timer if it exists
-		if (game.roundTimer) {
-			clearTimeout(game.roundTimer);
-			game.roundTimer = null;
-		}
-
-		io.to(roomId).emit("new_chat_message", {
-			user: "System",
-			text: `Round ${game.currentRound} ended! Reason : ${reason}. The word was "${game.keyword}". New round starting soon...`,
-		});
-
-		io.to(roomId).emit("end_round", {
-			gameStatus: "betweenRounds",
-		});
-
-		// Check if game should end
-		if (game.gameMode === "rounds" && game.currentRound >= game.maxRounds) {
-			endGame(roomId, game.currentRound);
-		} else {
-			// Start next round after a short delay (e.g., 8 seconds)
-			setTimeout(() => startNewRound(roomId), 8000);
-		}
-	}
-
-	function endGame(roomId, currentRound = null) {
-		const game = games[roomId];
-		if (!game) {
-			console.log(`Cannot end game: Room ${roomId} no longer exists`);
-			return;
-		}
-
-		const roundToReport = currentRound || game.currentRound;
-
-		// Zatrzymaj timer rundy jeśli istnieje
-		if (game.roundTimer) {
-			clearTimeout(game.roundTimer);
-			game.roundTimer = null;
-		}
-
-		// Zmień status gry
-		game.gameStatus = "ended";
-
-		// Znajdź zwycięzcę (gracz z najwyższym wynikiem)
-		let highestScore = 0;
-		let winner = null;
-
-		Object.entries(game.scores).forEach(([playerId, score]) => {
-			if (score > highestScore) {
-				highestScore = score;
-				winner = playerId;
-			}
-		});
-
-		// Znajdź nazwę zwycięzcy
-		let winnerName = "Unknown";
-		if (winner) {
-			// Szukaj najpierw po socket.id, potem po dbUserId
-			const winnerPlayer = game.players.find(
-				(p) => p.id === winner || p.dbUserId === winner
-			);
-			if (winnerPlayer) {
-				winnerName = winnerPlayer.username;
-			}
-		}
-
-		// Wyślij wiadomość o końcu gry
-		io.to(roomId).emit("new_chat_message", {
-			user: "System",
-			text: `Game ended! Winner: ${winnerName}, score: ${highestScore} points.`,
-			type: "game_end",
-		});
-
-		// Wyślij event o końcu gry z końcowymi wynikami
-		io.to(roomId).emit("game_ended", {
-			scores: game.scores,
-			winner: {
-				id: winner,
-				name: winnerName,
-				score: highestScore,
-			},
-			gameStats: {
-				rounds: roundToReport,
-				totalTime: Date.now() - game.startTime,
-			},
-		});
-		setTimeout(async () => {
-			// Rozłącz wszystkie sockety w pokoju
-			await disconnectRoomSockets(roomId);
-
-			// Usuń pokój z pamięci
-			delete games[roomId];
-
-			// Oznacz pokój jako nieaktywny w bazie danych
-			await deleteRoomFromDatabase(roomId);
-		}, 10000); // 10 sekund na wyświetlenie wyników
-	}
-	// If the guess is correct, update the game state and notify players
-	function correct_guess(
-		roomId,
-		socketId,
-		dbUserId = null,
-		isAuthenticated = false
-	) {
-		const game = games[roomId];
-		let guesser = game.players.find((p) => p.id === socketId);
-		// Update the scores
-		const scoreKey = isAuthenticated && dbUserId ? dbUserId : socketId;
-		game.scores[scoreKey] = (game.scores[scoreKey] || 0) + 1;
-
-		// 1. Special message only to the guesser
-		io.to(socketId).emit("new_chat_message", {
-			user: "System",
-			text: `Correct! You guessed the word: ${game.keyword}!`,
-			type: "correct_guess",
-		});
-
-		// 2. Notify all others (including drawer) but not the guesser
-		socket.broadcast.to(roomId).emit("new_chat_message", {
-			user: "System",
-			text: `${guesser ? guesser.username : "Someone"} has guessed the word!`,
-			type: "other_correct",
-		});
-
-		// 3. Update guessed to disable chat for the guesser
-		io.to(socketId).emit("update_guessed");
-
-		// 4. Check if that means end of the game
-		if (
-			game.gameMode === "points" &&
-			game.scores[scoreKey] >= game.pointsToWin
-		) {
-			endGame(roomId, scoreKey);
-		}
-
-		// 5. Check if all guessers have guessed correctly - FIXED logic
-		const allGuessers = game.players.filter((p) => p.id !== game.drawerId);
-		const correctGuessers =
-			game.round_history[game.currentRound].correct_guesses;
-		console.log(
-			`All guessers: ${allGuessers.map((p) => p.username).join(", ")}`
-		);
-		console.log(`Correct guessers: ${correctGuessers.join(", ")}`);
-		console.log(`drawerId: ${game.drawerId}`);
-
-		// Fixed: properly check if every guesser has correctly guessed
-		const allGuessedCorrectly = allGuessers.every((p) => {
-			return (
-				correctGuessers.includes(p.id) ||
-				(p.dbUserId && correctGuessers.includes(p.dbUserId))
-			);
-		});
-
-		if (allGuessers.length > 0 && allGuessedCorrectly) {
-			endRound(roomId, "all_guessed");
-		}
-	}
-
-	async function startNewRound(roomId) {
-		const game = games[roomId];
-
-		// Sprawdź czy pokój istnieje
-		if (!game) {
-			console.log(`Cannot start new round: Room ${roomId} no longer exists`);
-			return; // Wyjdź z funkcji jeśli pokój nie istnieje
-		}
-
-		game.drawingPaths = [];
-		game.currentRound += 1;
-		game.drawerId = getDrawer(roomId);
-		//game.keyword = await getRandomKeyword();
-		game.wordChoices = await getRandomKeywords(3);
-		game.keyword = null; // Will be set when drawer chooses
-		game.wordChoiceDeadline = Date.now() + 10000; // 10 seconds to choose
-		console.log(
-			`Starting new round ${game.currentRound} in room ${roomId}. Drawer: ${game.drawerId}, Keyword: ${game.keyword}`
-		);
-		game.round_history[game.currentRound] = {
-			drawerId: game.drawerId,
-			keyword: game.keyword,
-			correct_guesses: [], // socketIDs
-			all_guesses: {}, // socketId --> guess
-		};
-		// // Set round end time
-		// const roundDurationMs = game.roundDuration * 1000;
-		// game.roundEndTime = Date.now() + roundDurationMs;
-
-		// if (game.roundTimer) clearTimeout(game.roundTimer);
-		// game.roundTimer = setTimeout(() => endRound(roomId), roundDurationMs);
-
-		// // Emit new_round with roundEndTime - FIXED: removed duplicate currentRound
-		// io.to(roomId).emit("new_round", {
-		// 	drawingPaths: [],
-		// 	currentRound: game.currentRound,
-		// 	maxRounds: game.maxRounds,
-		// 	drawerId: game.drawerId,
-		// 	roundEndTime: game.roundEndTime,
-		// 	gameStatus: "playing",
-		// });
-
-		// io.to(game.drawerId).emit("new_keyword", { keyword: game.keyword });
-
-		// Set word choice timer (15 seconds)
-		if (game.wordChoiceTimer) clearTimeout(game.wordChoiceTimer);
-		game.wordChoiceTimer = setTimeout(() => {
-			// Auto-select first word if no choice made
-			if (!game.keyword && game.wordChoices && game.wordChoices.length > 0) {
-				selectWordForRound(roomId, game.wordChoices[0]);
-			}
-		}, 10000);
-
-		// Emit word choice event to drawer
-		io.to(game.drawerId).emit("choose_word", {
-			wordChoices: game.wordChoices,
-			deadline: game.wordChoiceDeadline,
-		});
-
-		// Emit round preparation to all players
-		io.to(roomId).emit("round_preparation", {
-			currentRound: game.currentRound,
-			maxRounds: game.maxRounds,
-			drawerId: game.drawerId,
-			gameStatus: "choosing_word",
-		});
-
-		// Broadcast updated queue if using queue mode
-		if (game.drawerChoice === "queue" && game.drawerQueue) {
-			io.to(roomId).emit("drawer_queue_updated", {
-				drawerQueue: game.drawerQueue.map((p) => ({
-					username: p.username,
-					socketId: p.socketId,
-				})),
-			});
-		}
-	}
-
 	socket.on("end_game", ({ roomId }) => {});
 
 	socket.on("start_game", ({ roomId }, callback) => {
@@ -1081,6 +1435,7 @@ io.on("connection", (socket) => {
 		game.gameStatus = "playing";
 		game.currentRound = 0;
 		game.startTime = Date.now(); // Dodaj tę linię
+		syncGameStatusToDatabase(roomId);
 		startNewRound(roomId);
 		// Notify everyone that the game is starting
 		io.to(roomId).emit("game_started");
@@ -1093,6 +1448,14 @@ io.on("connection", (socket) => {
 		const game = games[roomId];
 		if (!game) {
 			console.warn(`No game found for room ${roomId}.`);
+			return;
+		}
+
+		// Skip if no roomId or if room is being deleted
+		if (!roomId || !game || roomsBeingDeleted.has(roomId)) {
+			console.log(
+				`Room ${roomId} is being destroyed, skipping cleanup in disconnect handler.`
+			);
 			return;
 		}
 
@@ -1113,6 +1476,31 @@ io.on("connection", (socket) => {
 				drawerId: game.drawerId,
 				drawingPaths: game.drawingPaths,
 			});
+
+			// Add this: Broadcast room list update when player disconnects
+			broadcastRoomListUpdate();
+
+			// Update room timestamp in database
+			try {
+				// Check if room still exists in the database before updating
+				const roomExists = await prisma.room.findUnique({
+					where: { roomId },
+					select: { roomId: true },
+				});
+
+				if (roomExists) {
+					await prisma.room.update({
+						where: { roomId },
+						data: { updatedAt: new Date() },
+					});
+				} else {
+					console.log(
+						`Room ${roomId} no longer exists in database, skipping timestamp update.`
+					);
+				}
+			} catch (error) {
+				console.error(`Error updating room timestamp: ${error}`);
+			}
 
 			// Obsługa rysującego (bez zmian)
 			if (game.drawerId === removedPlayer.id) {
@@ -1192,6 +1580,8 @@ io.on("connection", (socket) => {
 				type: "system",
 			});
 
+			broadcastRoomListUpdate();
+
 			io.to(roomId).emit("room_destroyed");
 
 			// Najpierw usuń pokój z bazy danych
@@ -1264,6 +1654,19 @@ io.on("connection", (socket) => {
 				drawingPaths: game.drawingPaths,
 			});
 
+			// Broadcast room list update when player leaves
+			broadcastRoomListUpdate();
+
+			// Update room timestamp in database
+			try {
+				await prisma.room.update({
+					where: { roomId },
+					data: { updatedAt: new Date() },
+				});
+			} catch (error) {
+				console.error(`Error updating room timestamp: ${error}`);
+			}
+
 			// Jeśli opuszczający jest rysującym, obsłuż to specjalnie
 			if (game.drawerId === removedPlayer.id && game.gameStatus === "playing") {
 				endRound(roomId, "drawer_left");
@@ -1287,6 +1690,158 @@ io.on("connection", (socket) => {
 			callback?.({ success: false, message: "Failed to leave room" });
 		}
 	});
+});
+
+// Get active rooms for the lobby
+app.get("/api/rooms/active", async (req, res) => {
+	try {
+		// Find all active rooms from database
+		const dbRooms = await prisma.room.findMany({
+			where: {
+				status: {
+					not: "ended", // Show both waiting and playing rooms
+				},
+			},
+			select: {
+				roomId: true,
+				accessCode: true,
+				maxPlayers: true,
+				gameMode: true,
+				maxRounds: true,
+				pointsToWin: true,
+				roundDuration: true,
+				drawerChoice: true,
+				createdAt: true,
+				ownerName: true,
+				status: true,
+			},
+			orderBy: {
+				createdAt: "desc",
+			},
+		});
+
+		// Enhance with live data from memory (player count)
+		const enhancedRooms = dbRooms
+			.map((room) => {
+				const memoryRoom = games[room.roomId];
+				return {
+					...room,
+					isPrivate: !!room.accessCode,
+					// Don't expose actual accessCode
+					accessCode: room.accessCode ? true : false,
+					playerCount: memoryRoom ? memoryRoom.players.length : 0,
+					currentStatus: memoryRoom ? memoryRoom.gameStatus : "unknown",
+					isFull: memoryRoom
+						? memoryRoom.players.length >= room.maxPlayers
+						: false,
+				};
+			})
+			.filter((room) => room.playerCount > 0); // Only show rooms with at least 1 player
+
+		res.json({ success: true, rooms: enhancedRooms });
+	} catch (error) {
+		console.error("Error fetching active rooms:", error);
+		res.status(500).json({ success: false, message: "Failed to fetch rooms" });
+	}
+});
+
+// Get current user's statistics
+app.get("/api/user/statistics", authenticateToken, async (req, res) => {
+	try {
+		const userId = req.user.userId;
+
+		const userWithStats = await prisma.user.findUnique({
+			where: { id: userId },
+			select: {
+				username: true,
+				gamesPlayed: true,
+				gamesWon: true,
+				totalPoints: true,
+				createdAt: true,
+			},
+		});
+
+		if (!userWithStats) {
+			return res
+				.status(404)
+				.json({ success: false, message: "User not found" });
+		}
+
+		// Calculate derived statistics
+		const pointsPerGame =
+			userWithStats.gamesPlayed > 0
+				? Math.round(
+						(userWithStats.totalPoints / userWithStats.gamesPlayed) * 10
+				  ) / 10
+				: 0;
+
+		const winRate =
+			userWithStats.gamesPlayed > 0
+				? Math.round((userWithStats.gamesWon / userWithStats.gamesPlayed) * 100)
+				: 0;
+
+		res.json({
+			success: true,
+			statistics: {
+				...userWithStats,
+				pointsPerGame,
+				winRate,
+			},
+		});
+	} catch (error) {
+		console.error("Error fetching user statistics:", error);
+		res
+			.status(500)
+			.json({ success: false, message: "Failed to fetch statistics" });
+	}
+});
+
+// Get leaderboard data
+app.get("/api/leaderboard", async (req, res) => {
+	try {
+		const leaderboardData = await prisma.user.findMany({
+			where: {
+				gamesPlayed: { gt: 0 }, // Only include users who have played games
+			},
+			select: {
+				username: true,
+				gamesPlayed: true,
+				gamesWon: true,
+				totalPoints: true,
+			},
+			orderBy: [{ totalPoints: "desc" }],
+			take: 20, // Limit to top 20
+		});
+
+		// Calculate derived statistics for each user
+		const enhancedLeaderboard = leaderboardData.map((user) => {
+			const pointsPerGame =
+				user.gamesPlayed > 0
+					? Math.round((user.totalPoints / user.gamesPlayed) * 10) / 10
+					: 0;
+
+			const winRate =
+				user.gamesPlayed > 0
+					? Math.round((user.gamesWon / user.gamesPlayed) * 100)
+					: 0;
+
+			return {
+				...user,
+				pointsPerGame,
+				winRate,
+			};
+		});
+
+		res.json({
+			success: true,
+			leaderboard: enhancedLeaderboard,
+		});
+	} catch (error) {
+		console.error("Error fetching leaderboard:", error);
+		res
+			.status(500)
+			.json({ success: false, message: "Failed to fetch leaderboard" });
+	}
 });
 
 app.get("/api/ping", (req, res) => {
@@ -1340,6 +1895,8 @@ function handleSinglePlayerRoom(roomId) {
 			// ZMIANA: Używamy istniejącego wydarzenia room_destroyed zamiast tworzyć nowe
 			io.to(roomId).emit("room_destroyed");
 
+			broadcastRoomListUpdate();
+
 			// Rozłącz ostatniego gracza
 			const socket = Array.from(io.sockets.sockets.values()).find(
 				(s) => s.id === lastPlayer.id
@@ -1352,22 +1909,3 @@ function handleSinglePlayerRoom(roomId) {
 		}
 	}, 60000); // 60 sekund
 }
-
-// Najpierw szukaj po dbUserId
-const getOwnerUsername = () => {
-	// Najpierw szukaj po dbUserId
-	const ownerPlayer = game.players.find((p) => p.dbUserId === game.ownerId);
-
-	if (ownerPlayer) {
-		return ownerPlayer.username;
-	}
-
-	// Jeśli nie znaleziono, szukaj po socket.id
-	const ownerBySocketId = game.players.find((p) => p.id === game.ownerId);
-	if (ownerBySocketId) {
-		return ownerBySocketId.username;
-	}
-
-	// Jeśli nadal nie znaleziono, pokaż ID właściciela lub domyślną wartość
-	return game.ownerUsername || "Unknown";
-};

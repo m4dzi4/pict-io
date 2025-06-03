@@ -53,6 +53,9 @@ export default function GamePage() {
 	const [wordChoiceDeadline, setWordChoiceDeadline] = useState(null);
 	const [wordChoiceTimeLeft, setWordChoiceTimeLeft] = useState(null);
 	const wordChoiceTimerRef = useRef(null);
+	const [scores, setScores] = useState({});
+	const [lastScorer, setLastScorer] = useState(null);
+	const [roundSummary, setRoundSummary] = useState(null);
 
 	// function to retrieve roomID
 	useEffect(() => {
@@ -95,7 +98,17 @@ export default function GamePage() {
 			}));
 		});
 
+		newSocket.on("score_update", (data) => {
+			setScores(data.scores);
+			setLastScorer(data.lastScorer);
+
+			// Clear last scorer highlight after 3 seconds
+			setTimeout(() => setLastScorer(null), 3000);
+		});
+
 		newSocket.on("end_round", (data) => {
+			setRoundSummary(data.roundSummary);
+			setScores(data.roundSummary.scores);
 			setRoundEndTime(null);
 			setSecondsLeft(null);
 			clearInterval(timerIntervalRef.current);
@@ -172,6 +185,8 @@ export default function GamePage() {
 			setGame((prev) => ({
 				...prev,
 				keyword: data.keyword,
+				wordDifficulty: data.difficulty,
+				drawerBasePoints: data.basePoints,
 			}));
 		});
 
@@ -230,6 +245,8 @@ export default function GamePage() {
 			newSocket.off("drawer_queue_updated");
 			newSocket.off("choose_word");
 			newSocket.off("round_preparation");
+			newSocket.off("score_update");
+			newSocket.off("end_round");
 
 			if (socketRef.current) {
 				socketRef.current.disconnect();
@@ -238,6 +255,34 @@ export default function GamePage() {
 			}
 		};
 	}, [params.roomId]); // Only re-run if roomId changes or on mount/unmount
+
+	// Helper function to get difficulty stars
+	const getDifficultyStars = (difficulty) => {
+		return "★".repeat(difficulty) + "☆".repeat(5 - difficulty);
+	};
+
+	// Helper function to format scores display
+	const getFormattedScores = () => {
+		if (!game.players || Object.keys(scores).length === 0) return [];
+
+		return game.players
+			.map((player) => {
+				const scoreKey = player.dbUserId || player.id;
+				const score = scores[scoreKey] || 0;
+				const isLastScorer =
+					lastScorer &&
+					(lastScorer.username === player.username ||
+						(lastScorer.isDrawer && game.drawerId === player.id));
+
+				return {
+					...player,
+					score,
+					isLastScorer,
+					isCurrentDrawer: game.drawerId === player.id,
+				};
+			})
+			.sort((a, b) => b.score - a.score); // Sort by score descending
+	};
 
 	// Add word choice timer effect
 	useEffect(() => {
@@ -994,6 +1039,88 @@ export default function GamePage() {
 							: ""}
 					</div>
 
+					{/* Add the enhanced scores display here */}
+					{Object.keys(scores).length > 0 && (
+						<div style={{ marginTop: 8 }}>
+							<div style={{ fontWeight: "bold", marginBottom: 4 }}>Scores:</div>
+							<div
+								style={{
+									background: "#f5f5f5",
+									padding: "8px",
+									borderRadius: "4px",
+									maxHeight: "120px",
+									overflowY: "auto",
+								}}
+							>
+								{getFormattedScores().map((player, index) => (
+									<div
+										key={player.id}
+										style={{
+											display: "flex",
+											justifyContent: "space-between",
+											alignItems: "center",
+											padding: "2px 4px",
+											background: player.isLastScorer
+												? "#e8f5e8"
+												: player.isCurrentDrawer
+												? "#fff3cd"
+												: "transparent",
+											borderRadius: "2px",
+											marginBottom: "1px",
+											border: player.isLastScorer
+												? "1px solid #28a745"
+												: "none",
+										}}
+									>
+										<div
+											style={{
+												display: "flex",
+												alignItems: "center",
+												gap: "4px",
+											}}
+										>
+											<span
+												style={{
+													fontWeight: "bold",
+													minWidth: "16px",
+													fontSize: "12px",
+													color: index < 3 ? "#d4af37" : "#666",
+												}}
+											>
+												#{index + 1}
+											</span>
+											<span style={{ fontSize: "14px" }}>
+												{player.username}
+												{player.isCurrentDrawer && " 🎨"}
+												{player.isLastScorer && " ✨"}
+											</span>
+										</div>
+										<div
+											style={{
+												fontWeight: "bold",
+												color: player.isLastScorer ? "#28a745" : "#333",
+												fontSize: "14px",
+											}}
+										>
+											{player.score}
+											{player.isLastScorer && lastScorer && (
+												<span
+													style={{
+														fontSize: "10px",
+														color: "#666",
+														marginLeft: "2px",
+													}}
+												>
+													(+{lastScorer.points})
+												</span>
+											)}
+										</div>
+									</div>
+								))}
+							</div>
+						</div>
+					)}
+
 					{game.drawerChoice === "queue" && game.gameStatus === "playing" && (
 						<div style={{ marginTop: 4, fontSize: "14px" }}>
 							<strong>Drawing Queue:</strong>
@@ -1149,30 +1276,33 @@ export default function GamePage() {
 				</div>
 				<form
 					onSubmit={handleSendChatMessage}
-					style={{ display: "flex", gap: 4 }}
+					style={{ display: "flex", flexDirection: "column", gap: 4 }}
 				>
-					<input
-						type="text"
-						value={chatInput}
-						onChange={(e) => setChatInput(e.target.value)}
-						placeholder={
-							isDrawer
-								? "You are drawing, can't guess!"
-								: hasGuessedCorrectly
-								? "You already guessed correctly!"
-								: "Type your guess or chat..."
-						}
-						disabled={isDrawer || hasGuessedCorrectly}
-						style={{
-							flex: 1,
-							padding: 6,
-							borderRadius: 4,
-							border: "1px solid #ccc",
-						}}
-					/>
-					<button type="submit" disabled={isDrawer}>
-						Send
-					</button>
+					<div style={{ display: "flex", gap: 4 }}>
+						<input
+							type="text"
+							value={chatInput}
+							onChange={(e) => setChatInput(e.target.value)}
+							placeholder={
+								isDrawer
+									? "You are drawing, can't guess!"
+									: hasGuessedCorrectly
+									? "You already guessed correctly!"
+									: "Type your guess or chat..."
+							}
+							disabled={isDrawer || hasGuessedCorrectly}
+							style={{
+								flex: 1,
+								padding: 6,
+								borderRadius: 4,
+								border: "1px solid #ccc",
+							}}
+						/>
+						<button type="submit" disabled={isDrawer}>
+							Send
+						</button>
+					</div>
+
 					{/* Drawer Queue Button - only show if drawerChoice is queue and game is playing */}
 					{game.drawerChoice === "queue" &&
 						game.gameStatus === "playing" &&

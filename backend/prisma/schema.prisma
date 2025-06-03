@@ -21,8 +21,10 @@ model User {
   hashedPassword String?   // Make optional for OAuth users
   name           String?   // For NextAuth
   email          String?   @unique // For NextAuth
-  emailVerified  DateTime? // For NextAuth
   image          String?   // For NextAuth
+  gamesPlayed     Int      @default(0)
+  gamesWon        Int      @default(0)
+  totalPoints     Int      @default(0)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   
@@ -37,6 +39,7 @@ model Room {
   accessCode  String?                         // Optional: for private rooms
   
   ownerId     String
+  ownerName   String
   owner       User    @relation("RoomOwner", fields: [ownerId], references: [id]) // Foreign key to User
 
   // Game settings

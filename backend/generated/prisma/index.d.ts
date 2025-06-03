@@ -1087,8 +1087,22 @@ export namespace Prisma {
 
   export type AggregateUser = {
     _count: UserCountAggregateOutputType | null
+    _avg: UserAvgAggregateOutputType | null
+    _sum: UserSumAggregateOutputType | null
     _min: UserMinAggregateOutputType | null
     _max: UserMaxAggregateOutputType | null
+  }
+
+  export type UserAvgAggregateOutputType = {
+    gamesPlayed: number | null
+    gamesWon: number | null
+    totalPoints: number | null
+  }
+
+  export type UserSumAggregateOutputType = {
+    gamesPlayed: number | null
+    gamesWon: number | null
+    totalPoints: number | null
   }
 
   export type UserMinAggregateOutputType = {
@@ -1097,8 +1111,10 @@ export namespace Prisma {
     hashedPassword: string | null
     name: string | null
     email: string | null
-    emailVerified: Date | null
     image: string | null
+    gamesPlayed: number | null
+    gamesWon: number | null
+    totalPoints: number | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -1109,8 +1125,10 @@ export namespace Prisma {
     hashedPassword: string | null
     name: string | null
     email: string | null
-    emailVerified: Date | null
     image: string | null
+    gamesPlayed: number | null
+    gamesWon: number | null
+    totalPoints: number | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -1121,13 +1139,27 @@ export namespace Prisma {
     hashedPassword: number
     name: number
     email: number
-    emailVerified: number
     image: number
+    gamesPlayed: number
+    gamesWon: number
+    totalPoints: number
     createdAt: number
     updatedAt: number
     _all: number
   }
 
+
+  export type UserAvgAggregateInputType = {
+    gamesPlayed?: true
+    gamesWon?: true
+    totalPoints?: true
+  }
+
+  export type UserSumAggregateInputType = {
+    gamesPlayed?: true
+    gamesWon?: true
+    totalPoints?: true
+  }
 
   export type UserMinAggregateInputType = {
     id?: true
@@ -1135,8 +1167,10 @@ export namespace Prisma {
     hashedPassword?: true
     name?: true
     email?: true
-    emailVerified?: true
     image?: true
+    gamesPlayed?: true
+    gamesWon?: true
+    totalPoints?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -1147,8 +1181,10 @@ export namespace Prisma {
     hashedPassword?: true
     name?: true
     email?: true
-    emailVerified?: true
     image?: true
+    gamesPlayed?: true
+    gamesWon?: true
+    totalPoints?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -1159,8 +1195,10 @@ export namespace Prisma {
     hashedPassword?: true
     name?: true
     email?: true
-    emailVerified?: true
     image?: true
+    gamesPlayed?: true
+    gamesWon?: true
+    totalPoints?: true
     createdAt?: true
     updatedAt?: true
     _all?: true
@@ -1204,6 +1242,18 @@ export namespace Prisma {
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
      * 
+     * Select which fields to average
+    **/
+    _avg?: UserAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: UserSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
      * Select which fields to find the minimum value
     **/
     _min?: UserMinAggregateInputType
@@ -1234,6 +1284,8 @@ export namespace Prisma {
     take?: number
     skip?: number
     _count?: UserCountAggregateInputType | true
+    _avg?: UserAvgAggregateInputType
+    _sum?: UserSumAggregateInputType
     _min?: UserMinAggregateInputType
     _max?: UserMaxAggregateInputType
   }
@@ -1244,11 +1296,15 @@ export namespace Prisma {
     hashedPassword: string | null
     name: string | null
     email: string | null
-    emailVerified: Date | null
     image: string | null
+    gamesPlayed: number
+    gamesWon: number
+    totalPoints: number
     createdAt: Date
     updatedAt: Date
     _count: UserCountAggregateOutputType | null
+    _avg: UserAvgAggregateOutputType | null
+    _sum: UserSumAggregateOutputType | null
     _min: UserMinAggregateOutputType | null
     _max: UserMaxAggregateOutputType | null
   }
@@ -1273,8 +1329,10 @@ export namespace Prisma {
     hashedPassword?: boolean
     name?: boolean
     email?: boolean
-    emailVerified?: boolean
     image?: boolean
+    gamesPlayed?: boolean
+    gamesWon?: boolean
+    totalPoints?: boolean
     createdAt?: boolean
     updatedAt?: boolean
     roomsOwned?: boolean | User$roomsOwnedArgs<ExtArgs>
@@ -1287,8 +1345,10 @@ export namespace Prisma {
     hashedPassword?: boolean
     name?: boolean
     email?: boolean
-    emailVerified?: boolean
     image?: boolean
+    gamesPlayed?: boolean
+    gamesWon?: boolean
+    totalPoints?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }, ExtArgs["result"]["user"]>
@@ -1299,8 +1359,10 @@ export namespace Prisma {
     hashedPassword?: boolean
     name?: boolean
     email?: boolean
-    emailVerified?: boolean
     image?: boolean
+    gamesPlayed?: boolean
+    gamesWon?: boolean
+    totalPoints?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }, ExtArgs["result"]["user"]>
@@ -1311,13 +1373,15 @@ export namespace Prisma {
     hashedPassword?: boolean
     name?: boolean
     email?: boolean
-    emailVerified?: boolean
     image?: boolean
+    gamesPlayed?: boolean
+    gamesWon?: boolean
+    totalPoints?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type UserOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "username" | "hashedPassword" | "name" | "email" | "emailVerified" | "image" | "createdAt" | "updatedAt", ExtArgs["result"]["user"]>
+  export type UserOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "username" | "hashedPassword" | "name" | "email" | "image" | "gamesPlayed" | "gamesWon" | "totalPoints" | "createdAt" | "updatedAt", ExtArgs["result"]["user"]>
   export type UserInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     roomsOwned?: boolean | User$roomsOwnedArgs<ExtArgs>
     _count?: boolean | UserCountOutputTypeDefaultArgs<ExtArgs>
@@ -1336,8 +1400,10 @@ export namespace Prisma {
       hashedPassword: string | null
       name: string | null
       email: string | null
-      emailVerified: Date | null
       image: string | null
+      gamesPlayed: number
+      gamesWon: number
+      totalPoints: number
       createdAt: Date
       updatedAt: Date
     }, ExtArgs["result"]["user"]>
@@ -1769,8 +1835,10 @@ export namespace Prisma {
     readonly hashedPassword: FieldRef<"User", 'String'>
     readonly name: FieldRef<"User", 'String'>
     readonly email: FieldRef<"User", 'String'>
-    readonly emailVerified: FieldRef<"User", 'DateTime'>
     readonly image: FieldRef<"User", 'String'>
+    readonly gamesPlayed: FieldRef<"User", 'Int'>
+    readonly gamesWon: FieldRef<"User", 'Int'>
+    readonly totalPoints: FieldRef<"User", 'Int'>
     readonly createdAt: FieldRef<"User", 'DateTime'>
     readonly updatedAt: FieldRef<"User", 'DateTime'>
   }
@@ -2235,6 +2303,7 @@ export namespace Prisma {
     maxPlayers: number | null
     accessCode: string | null
     ownerId: string | null
+    ownerName: string | null
     gameMode: string | null
     maxRounds: number | null
     pointsToWin: number | null
@@ -2251,6 +2320,7 @@ export namespace Prisma {
     maxPlayers: number | null
     accessCode: string | null
     ownerId: string | null
+    ownerName: string | null
     gameMode: string | null
     maxRounds: number | null
     pointsToWin: number | null
@@ -2267,6 +2337,7 @@ export namespace Prisma {
     maxPlayers: number
     accessCode: number
     ownerId: number
+    ownerName: number
     gameMode: number
     maxRounds: number
     pointsToWin: number
@@ -2299,6 +2370,7 @@ export namespace Prisma {
     maxPlayers?: true
     accessCode?: true
     ownerId?: true
+    ownerName?: true
     gameMode?: true
     maxRounds?: true
     pointsToWin?: true
@@ -2315,6 +2387,7 @@ export namespace Prisma {
     maxPlayers?: true
     accessCode?: true
     ownerId?: true
+    ownerName?: true
     gameMode?: true
     maxRounds?: true
     pointsToWin?: true
@@ -2331,6 +2404,7 @@ export namespace Prisma {
     maxPlayers?: true
     accessCode?: true
     ownerId?: true
+    ownerName?: true
     gameMode?: true
     maxRounds?: true
     pointsToWin?: true
@@ -2434,6 +2508,7 @@ export namespace Prisma {
     maxPlayers: number
     accessCode: string | null
     ownerId: string
+    ownerName: string
     gameMode: string
     maxRounds: number
     pointsToWin: number
@@ -2469,6 +2544,7 @@ export namespace Prisma {
     maxPlayers?: boolean
     accessCode?: boolean
     ownerId?: boolean
+    ownerName?: boolean
     gameMode?: boolean
     maxRounds?: boolean
     pointsToWin?: boolean
@@ -2486,6 +2562,7 @@ export namespace Prisma {
     maxPlayers?: boolean
     accessCode?: boolean
     ownerId?: boolean
+    ownerName?: boolean
     gameMode?: boolean
     maxRounds?: boolean
     pointsToWin?: boolean
@@ -2503,6 +2580,7 @@ export namespace Prisma {
     maxPlayers?: boolean
     accessCode?: boolean
     ownerId?: boolean
+    ownerName?: boolean
     gameMode?: boolean
     maxRounds?: boolean
     pointsToWin?: boolean
@@ -2520,6 +2598,7 @@ export namespace Prisma {
     maxPlayers?: boolean
     accessCode?: boolean
     ownerId?: boolean
+    ownerName?: boolean
     gameMode?: boolean
     maxRounds?: boolean
     pointsToWin?: boolean
@@ -2530,7 +2609,7 @@ export namespace Prisma {
     updatedAt?: boolean
   }
 
-  export type RoomOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "roomId" | "maxPlayers" | "accessCode" | "ownerId" | "gameMode" | "maxRounds" | "pointsToWin" | "roundDuration" | "drawerChoice" | "status" | "createdAt" | "updatedAt", ExtArgs["result"]["room"]>
+  export type RoomOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "roomId" | "maxPlayers" | "accessCode" | "ownerId" | "ownerName" | "gameMode" | "maxRounds" | "pointsToWin" | "roundDuration" | "drawerChoice" | "status" | "createdAt" | "updatedAt", ExtArgs["result"]["room"]>
   export type RoomInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     owner?: boolean | UserDefaultArgs<ExtArgs>
   }
@@ -2552,6 +2631,7 @@ export namespace Prisma {
       maxPlayers: number
       accessCode: string | null
       ownerId: string
+      ownerName: string
       gameMode: string
       maxRounds: number
       pointsToWin: number
@@ -2989,6 +3069,7 @@ export namespace Prisma {
     readonly maxPlayers: FieldRef<"Room", 'Int'>
     readonly accessCode: FieldRef<"Room", 'String'>
     readonly ownerId: FieldRef<"Room", 'String'>
+    readonly ownerName: FieldRef<"Room", 'String'>
     readonly gameMode: FieldRef<"Room", 'String'>
     readonly maxRounds: FieldRef<"Room", 'Int'>
     readonly pointsToWin: FieldRef<"Room", 'Int'>
@@ -4477,8 +4558,10 @@ export namespace Prisma {
     hashedPassword: 'hashedPassword',
     name: 'name',
     email: 'email',
-    emailVerified: 'emailVerified',
     image: 'image',
+    gamesPlayed: 'gamesPlayed',
+    gamesWon: 'gamesWon',
+    totalPoints: 'totalPoints',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
   };
@@ -4492,6 +4575,7 @@ export namespace Prisma {
     maxPlayers: 'maxPlayers',
     accessCode: 'accessCode',
     ownerId: 'ownerId',
+    ownerName: 'ownerName',
     gameMode: 'gameMode',
     maxRounds: 'maxRounds',
     pointsToWin: 'pointsToWin',
@@ -4561,20 +4645,6 @@ export namespace Prisma {
 
 
   /**
-   * Reference to a field of type 'DateTime'
-   */
-  export type DateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'DateTime'>
-    
-
-
-  /**
-   * Reference to a field of type 'DateTime[]'
-   */
-  export type ListDateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'DateTime[]'>
-    
-
-
-  /**
    * Reference to a field of type 'Int'
    */
   export type IntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int'>
@@ -4585,6 +4655,20 @@ export namespace Prisma {
    * Reference to a field of type 'Int[]'
    */
   export type ListIntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int[]'>
+    
+
+
+  /**
+   * Reference to a field of type 'DateTime'
+   */
+  export type DateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'DateTime'>
+    
+
+
+  /**
+   * Reference to a field of type 'DateTime[]'
+   */
+  export type ListDateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'DateTime[]'>
     
 
 
@@ -4614,8 +4698,10 @@ export namespace Prisma {
     hashedPassword?: StringNullableFilter<"User"> | string | null
     name?: StringNullableFilter<"User"> | string | null
     email?: StringNullableFilter<"User"> | string | null
-    emailVerified?: DateTimeNullableFilter<"User"> | Date | string | null
     image?: StringNullableFilter<"User"> | string | null
+    gamesPlayed?: IntFilter<"User"> | number
+    gamesWon?: IntFilter<"User"> | number
+    totalPoints?: IntFilter<"User"> | number
     createdAt?: DateTimeFilter<"User"> | Date | string
     updatedAt?: DateTimeFilter<"User"> | Date | string
     roomsOwned?: RoomListRelationFilter
@@ -4627,8 +4713,10 @@ export namespace Prisma {
     hashedPassword?: SortOrderInput | SortOrder
     name?: SortOrderInput | SortOrder
     email?: SortOrderInput | SortOrder
-    emailVerified?: SortOrderInput | SortOrder
     image?: SortOrderInput | SortOrder
+    gamesPlayed?: SortOrder
+    gamesWon?: SortOrder
+    totalPoints?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     roomsOwned?: RoomOrderByRelationAggregateInput
@@ -4643,8 +4731,10 @@ export namespace Prisma {
     NOT?: UserWhereInput | UserWhereInput[]
     hashedPassword?: StringNullableFilter<"User"> | string | null
     name?: StringNullableFilter<"User"> | string | null
-    emailVerified?: DateTimeNullableFilter<"User"> | Date | string | null
     image?: StringNullableFilter<"User"> | string | null
+    gamesPlayed?: IntFilter<"User"> | number
+    gamesWon?: IntFilter<"User"> | number
+    totalPoints?: IntFilter<"User"> | number
     createdAt?: DateTimeFilter<"User"> | Date | string
     updatedAt?: DateTimeFilter<"User"> | Date | string
     roomsOwned?: RoomListRelationFilter
@@ -4656,13 +4746,17 @@ export namespace Prisma {
     hashedPassword?: SortOrderInput | SortOrder
     name?: SortOrderInput | SortOrder
     email?: SortOrderInput | SortOrder
-    emailVerified?: SortOrderInput | SortOrder
     image?: SortOrderInput | SortOrder
+    gamesPlayed?: SortOrder
+    gamesWon?: SortOrder
+    totalPoints?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     _count?: UserCountOrderByAggregateInput
+    _avg?: UserAvgOrderByAggregateInput
     _max?: UserMaxOrderByAggregateInput
     _min?: UserMinOrderByAggregateInput
+    _sum?: UserSumOrderByAggregateInput
   }
 
   export type UserScalarWhereWithAggregatesInput = {
@@ -4674,8 +4768,10 @@ export namespace Prisma {
     hashedPassword?: StringNullableWithAggregatesFilter<"User"> | string | null
     name?: StringNullableWithAggregatesFilter<"User"> | string | null
     email?: StringNullableWithAggregatesFilter<"User"> | string | null
-    emailVerified?: DateTimeNullableWithAggregatesFilter<"User"> | Date | string | null
     image?: StringNullableWithAggregatesFilter<"User"> | string | null
+    gamesPlayed?: IntWithAggregatesFilter<"User"> | number
+    gamesWon?: IntWithAggregatesFilter<"User"> | number
+    totalPoints?: IntWithAggregatesFilter<"User"> | number
     createdAt?: DateTimeWithAggregatesFilter<"User"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"User"> | Date | string
   }
@@ -4689,6 +4785,7 @@ export namespace Prisma {
     maxPlayers?: IntFilter<"Room"> | number
     accessCode?: StringNullableFilter<"Room"> | string | null
     ownerId?: StringFilter<"Room"> | string
+    ownerName?: StringFilter<"Room"> | string
     gameMode?: StringFilter<"Room"> | string
     maxRounds?: IntFilter<"Room"> | number
     pointsToWin?: IntFilter<"Room"> | number
@@ -4706,6 +4803,7 @@ export namespace Prisma {
     maxPlayers?: SortOrder
     accessCode?: SortOrderInput | SortOrder
     ownerId?: SortOrder
+    ownerName?: SortOrder
     gameMode?: SortOrder
     maxRounds?: SortOrder
     pointsToWin?: SortOrder
@@ -4726,6 +4824,7 @@ export namespace Prisma {
     maxPlayers?: IntFilter<"Room"> | number
     accessCode?: StringNullableFilter<"Room"> | string | null
     ownerId?: StringFilter<"Room"> | string
+    ownerName?: StringFilter<"Room"> | string
     gameMode?: StringFilter<"Room"> | string
     maxRounds?: IntFilter<"Room"> | number
     pointsToWin?: IntFilter<"Room"> | number
@@ -4743,6 +4842,7 @@ export namespace Prisma {
     maxPlayers?: SortOrder
     accessCode?: SortOrderInput | SortOrder
     ownerId?: SortOrder
+    ownerName?: SortOrder
     gameMode?: SortOrder
     maxRounds?: SortOrder
     pointsToWin?: SortOrder
@@ -4767,6 +4867,7 @@ export namespace Prisma {
     maxPlayers?: IntWithAggregatesFilter<"Room"> | number
     accessCode?: StringNullableWithAggregatesFilter<"Room"> | string | null
     ownerId?: StringWithAggregatesFilter<"Room"> | string
+    ownerName?: StringWithAggregatesFilter<"Room"> | string
     gameMode?: StringWithAggregatesFilter<"Room"> | string
     maxRounds?: IntWithAggregatesFilter<"Room"> | number
     pointsToWin?: IntWithAggregatesFilter<"Room"> | number
@@ -4842,8 +4943,10 @@ export namespace Prisma {
     hashedPassword?: string | null
     name?: string | null
     email?: string | null
-    emailVerified?: Date | string | null
     image?: string | null
+    gamesPlayed?: number
+    gamesWon?: number
+    totalPoints?: number
     createdAt?: Date | string
     updatedAt?: Date | string
     roomsOwned?: RoomCreateNestedManyWithoutOwnerInput
@@ -4855,8 +4958,10 @@ export namespace Prisma {
     hashedPassword?: string | null
     name?: string | null
     email?: string | null
-    emailVerified?: Date | string | null
     image?: string | null
+    gamesPlayed?: number
+    gamesWon?: number
+    totalPoints?: number
     createdAt?: Date | string
     updatedAt?: Date | string
     roomsOwned?: RoomUncheckedCreateNestedManyWithoutOwnerInput
@@ -4868,8 +4973,10 @@ export namespace Prisma {
     hashedPassword?: NullableStringFieldUpdateOperationsInput | string | null
     name?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
-    emailVerified?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     image?: NullableStringFieldUpdateOperationsInput | string | null
+    gamesPlayed?: IntFieldUpdateOperationsInput | number
+    gamesWon?: IntFieldUpdateOperationsInput | number
+    totalPoints?: IntFieldUpdateOperationsInput | number
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     roomsOwned?: RoomUpdateManyWithoutOwnerNestedInput
@@ -4881,8 +4988,10 @@ export namespace Prisma {
     hashedPassword?: NullableStringFieldUpdateOperationsInput | string | null
     name?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
-    emailVerified?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     image?: NullableStringFieldUpdateOperationsInput | string | null
+    gamesPlayed?: IntFieldUpdateOperationsInput | number
+    gamesWon?: IntFieldUpdateOperationsInput | number
+    totalPoints?: IntFieldUpdateOperationsInput | number
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     roomsOwned?: RoomUncheckedUpdateManyWithoutOwnerNestedInput
@@ -4894,8 +5003,10 @@ export namespace Prisma {
     hashedPassword?: string | null
     name?: string | null
     email?: string | null
-    emailVerified?: Date | string | null
     image?: string | null
+    gamesPlayed?: number
+    gamesWon?: number
+    totalPoints?: number
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -4906,8 +5017,10 @@ export namespace Prisma {
     hashedPassword?: NullableStringFieldUpdateOperationsInput | string | null
     name?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
-    emailVerified?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     image?: NullableStringFieldUpdateOperationsInput | string | null
+    gamesPlayed?: IntFieldUpdateOperationsInput | number
+    gamesWon?: IntFieldUpdateOperationsInput | number
+    totalPoints?: IntFieldUpdateOperationsInput | number
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -4918,8 +5031,10 @@ export namespace Prisma {
     hashedPassword?: NullableStringFieldUpdateOperationsInput | string | null
     name?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
-    emailVerified?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     image?: NullableStringFieldUpdateOperationsInput | string | null
+    gamesPlayed?: IntFieldUpdateOperationsInput | number
+    gamesWon?: IntFieldUpdateOperationsInput | number
+    totalPoints?: IntFieldUpdateOperationsInput | number
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -4929,6 +5044,7 @@ export namespace Prisma {
     roomId: string
     maxPlayers?: number
     accessCode?: string | null
+    ownerName: string
     gameMode?: string
     maxRounds?: number
     pointsToWin?: number
@@ -4946,6 +5062,7 @@ export namespace Prisma {
     maxPlayers?: number
     accessCode?: string | null
     ownerId: string
+    ownerName: string
     gameMode?: string
     maxRounds?: number
     pointsToWin?: number
@@ -4961,6 +5078,7 @@ export namespace Prisma {
     roomId?: StringFieldUpdateOperationsInput | string
     maxPlayers?: IntFieldUpdateOperationsInput | number
     accessCode?: NullableStringFieldUpdateOperationsInput | string | null
+    ownerName?: StringFieldUpdateOperationsInput | string
     gameMode?: StringFieldUpdateOperationsInput | string
     maxRounds?: IntFieldUpdateOperationsInput | number
     pointsToWin?: IntFieldUpdateOperationsInput | number
@@ -4978,6 +5096,7 @@ export namespace Prisma {
     maxPlayers?: IntFieldUpdateOperationsInput | number
     accessCode?: NullableStringFieldUpdateOperationsInput | string | null
     ownerId?: StringFieldUpdateOperationsInput | string
+    ownerName?: StringFieldUpdateOperationsInput | string
     gameMode?: StringFieldUpdateOperationsInput | string
     maxRounds?: IntFieldUpdateOperationsInput | number
     pointsToWin?: IntFieldUpdateOperationsInput | number
@@ -4994,6 +5113,7 @@ export namespace Prisma {
     maxPlayers?: number
     accessCode?: string | null
     ownerId: string
+    ownerName: string
     gameMode?: string
     maxRounds?: number
     pointsToWin?: number
@@ -5009,6 +5129,7 @@ export namespace Prisma {
     roomId?: StringFieldUpdateOperationsInput | string
     maxPlayers?: IntFieldUpdateOperationsInput | number
     accessCode?: NullableStringFieldUpdateOperationsInput | string | null
+    ownerName?: StringFieldUpdateOperationsInput | string
     gameMode?: StringFieldUpdateOperationsInput | string
     maxRounds?: IntFieldUpdateOperationsInput | number
     pointsToWin?: IntFieldUpdateOperationsInput | number
@@ -5025,6 +5146,7 @@ export namespace Prisma {
     maxPlayers?: IntFieldUpdateOperationsInput | number
     accessCode?: NullableStringFieldUpdateOperationsInput | string | null
     ownerId?: StringFieldUpdateOperationsInput | string
+    ownerName?: StringFieldUpdateOperationsInput | string
     gameMode?: StringFieldUpdateOperationsInput | string
     maxRounds?: IntFieldUpdateOperationsInput | number
     pointsToWin?: IntFieldUpdateOperationsInput | number
@@ -5125,15 +5247,15 @@ export namespace Prisma {
     not?: NestedStringNullableFilter<$PrismaModel> | string | null
   }
 
-  export type DateTimeNullableFilter<$PrismaModel = never> = {
-    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
-    in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
-    notIn?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
-    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    not?: NestedDateTimeNullableFilter<$PrismaModel> | Date | string | null
+  export type IntFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel>
+    in?: number[] | ListIntFieldRefInput<$PrismaModel>
+    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntFilter<$PrismaModel> | number
   }
 
   export type DateTimeFilter<$PrismaModel = never> = {
@@ -5168,10 +5290,18 @@ export namespace Prisma {
     hashedPassword?: SortOrder
     name?: SortOrder
     email?: SortOrder
-    emailVerified?: SortOrder
     image?: SortOrder
+    gamesPlayed?: SortOrder
+    gamesWon?: SortOrder
+    totalPoints?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
+  }
+
+  export type UserAvgOrderByAggregateInput = {
+    gamesPlayed?: SortOrder
+    gamesWon?: SortOrder
+    totalPoints?: SortOrder
   }
 
   export type UserMaxOrderByAggregateInput = {
@@ -5180,8 +5310,10 @@ export namespace Prisma {
     hashedPassword?: SortOrder
     name?: SortOrder
     email?: SortOrder
-    emailVerified?: SortOrder
     image?: SortOrder
+    gamesPlayed?: SortOrder
+    gamesWon?: SortOrder
+    totalPoints?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -5192,10 +5324,18 @@ export namespace Prisma {
     hashedPassword?: SortOrder
     name?: SortOrder
     email?: SortOrder
-    emailVerified?: SortOrder
     image?: SortOrder
+    gamesPlayed?: SortOrder
+    gamesWon?: SortOrder
+    totalPoints?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
+  }
+
+  export type UserSumOrderByAggregateInput = {
+    gamesPlayed?: SortOrder
+    gamesWon?: SortOrder
+    totalPoints?: SortOrder
   }
 
   export type StringWithAggregatesFilter<$PrismaModel = never> = {
@@ -5234,18 +5374,20 @@ export namespace Prisma {
     _max?: NestedStringNullableFilter<$PrismaModel>
   }
 
-  export type DateTimeNullableWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
-    in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
-    notIn?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
-    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    not?: NestedDateTimeNullableWithAggregatesFilter<$PrismaModel> | Date | string | null
-    _count?: NestedIntNullableFilter<$PrismaModel>
-    _min?: NestedDateTimeNullableFilter<$PrismaModel>
-    _max?: NestedDateTimeNullableFilter<$PrismaModel>
+  export type IntWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel>
+    in?: number[] | ListIntFieldRefInput<$PrismaModel>
+    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntWithAggregatesFilter<$PrismaModel> | number
+    _count?: NestedIntFilter<$PrismaModel>
+    _avg?: NestedFloatFilter<$PrismaModel>
+    _sum?: NestedIntFilter<$PrismaModel>
+    _min?: NestedIntFilter<$PrismaModel>
+    _max?: NestedIntFilter<$PrismaModel>
   }
 
   export type DateTimeWithAggregatesFilter<$PrismaModel = never> = {
@@ -5262,17 +5404,6 @@ export namespace Prisma {
     _max?: NestedDateTimeFilter<$PrismaModel>
   }
 
-  export type IntFilter<$PrismaModel = never> = {
-    equals?: number | IntFieldRefInput<$PrismaModel>
-    in?: number[] | ListIntFieldRefInput<$PrismaModel>
-    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
-    lt?: number | IntFieldRefInput<$PrismaModel>
-    lte?: number | IntFieldRefInput<$PrismaModel>
-    gt?: number | IntFieldRefInput<$PrismaModel>
-    gte?: number | IntFieldRefInput<$PrismaModel>
-    not?: NestedIntFilter<$PrismaModel> | number
-  }
-
   export type UserScalarRelationFilter = {
     is?: UserWhereInput
     isNot?: UserWhereInput
@@ -5284,6 +5415,7 @@ export namespace Prisma {
     maxPlayers?: SortOrder
     accessCode?: SortOrder
     ownerId?: SortOrder
+    ownerName?: SortOrder
     gameMode?: SortOrder
     maxRounds?: SortOrder
     pointsToWin?: SortOrder
@@ -5307,6 +5439,7 @@ export namespace Prisma {
     maxPlayers?: SortOrder
     accessCode?: SortOrder
     ownerId?: SortOrder
+    ownerName?: SortOrder
     gameMode?: SortOrder
     maxRounds?: SortOrder
     pointsToWin?: SortOrder
@@ -5323,6 +5456,7 @@ export namespace Prisma {
     maxPlayers?: SortOrder
     accessCode?: SortOrder
     ownerId?: SortOrder
+    ownerName?: SortOrder
     gameMode?: SortOrder
     maxRounds?: SortOrder
     pointsToWin?: SortOrder
@@ -5338,22 +5472,6 @@ export namespace Prisma {
     maxRounds?: SortOrder
     pointsToWin?: SortOrder
     roundDuration?: SortOrder
-  }
-
-  export type IntWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: number | IntFieldRefInput<$PrismaModel>
-    in?: number[] | ListIntFieldRefInput<$PrismaModel>
-    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
-    lt?: number | IntFieldRefInput<$PrismaModel>
-    lte?: number | IntFieldRefInput<$PrismaModel>
-    gt?: number | IntFieldRefInput<$PrismaModel>
-    gte?: number | IntFieldRefInput<$PrismaModel>
-    not?: NestedIntWithAggregatesFilter<$PrismaModel> | number
-    _count?: NestedIntFilter<$PrismaModel>
-    _avg?: NestedFloatFilter<$PrismaModel>
-    _sum?: NestedIntFilter<$PrismaModel>
-    _min?: NestedIntFilter<$PrismaModel>
-    _max?: NestedIntFilter<$PrismaModel>
   }
 
   export type KeywordCountOrderByAggregateInput = {
@@ -5415,8 +5533,12 @@ export namespace Prisma {
     set?: string | null
   }
 
-  export type NullableDateTimeFieldUpdateOperationsInput = {
-    set?: Date | string | null
+  export type IntFieldUpdateOperationsInput = {
+    set?: number
+    increment?: number
+    decrement?: number
+    multiply?: number
+    divide?: number
   }
 
   export type DateTimeFieldUpdateOperationsInput = {
@@ -5457,14 +5579,6 @@ export namespace Prisma {
     connect?: UserWhereUniqueInput
   }
 
-  export type IntFieldUpdateOperationsInput = {
-    set?: number
-    increment?: number
-    decrement?: number
-    multiply?: number
-    divide?: number
-  }
-
   export type UserUpdateOneRequiredWithoutRoomsOwnedNestedInput = {
     create?: XOR<UserCreateWithoutRoomsOwnedInput, UserUncheckedCreateWithoutRoomsOwnedInput>
     connectOrCreate?: UserCreateOrConnectWithoutRoomsOwnedInput
@@ -5501,15 +5615,15 @@ export namespace Prisma {
     not?: NestedStringNullableFilter<$PrismaModel> | string | null
   }
 
-  export type NestedDateTimeNullableFilter<$PrismaModel = never> = {
-    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
-    in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
-    notIn?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
-    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    not?: NestedDateTimeNullableFilter<$PrismaModel> | Date | string | null
+  export type NestedIntFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel>
+    in?: number[] | ListIntFieldRefInput<$PrismaModel>
+    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntFilter<$PrismaModel> | number
   }
 
   export type NestedDateTimeFilter<$PrismaModel = never> = {
@@ -5540,17 +5654,6 @@ export namespace Prisma {
     _max?: NestedStringFilter<$PrismaModel>
   }
 
-  export type NestedIntFilter<$PrismaModel = never> = {
-    equals?: number | IntFieldRefInput<$PrismaModel>
-    in?: number[] | ListIntFieldRefInput<$PrismaModel>
-    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
-    lt?: number | IntFieldRefInput<$PrismaModel>
-    lte?: number | IntFieldRefInput<$PrismaModel>
-    gt?: number | IntFieldRefInput<$PrismaModel>
-    gte?: number | IntFieldRefInput<$PrismaModel>
-    not?: NestedIntFilter<$PrismaModel> | number
-  }
-
   export type NestedStringNullableWithAggregatesFilter<$PrismaModel = never> = {
     equals?: string | StringFieldRefInput<$PrismaModel> | null
     in?: string[] | ListStringFieldRefInput<$PrismaModel> | null
@@ -5577,34 +5680,6 @@ export namespace Prisma {
     gt?: number | IntFieldRefInput<$PrismaModel>
     gte?: number | IntFieldRefInput<$PrismaModel>
     not?: NestedIntNullableFilter<$PrismaModel> | number | null
-  }
-
-  export type NestedDateTimeNullableWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
-    in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
-    notIn?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
-    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    not?: NestedDateTimeNullableWithAggregatesFilter<$PrismaModel> | Date | string | null
-    _count?: NestedIntNullableFilter<$PrismaModel>
-    _min?: NestedDateTimeNullableFilter<$PrismaModel>
-    _max?: NestedDateTimeNullableFilter<$PrismaModel>
-  }
-
-  export type NestedDateTimeWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel>
-    notIn?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel>
-    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    not?: NestedDateTimeWithAggregatesFilter<$PrismaModel> | Date | string
-    _count?: NestedIntFilter<$PrismaModel>
-    _min?: NestedDateTimeFilter<$PrismaModel>
-    _max?: NestedDateTimeFilter<$PrismaModel>
   }
 
   export type NestedIntWithAggregatesFilter<$PrismaModel = never> = {
@@ -5634,11 +5709,26 @@ export namespace Prisma {
     not?: NestedFloatFilter<$PrismaModel> | number
   }
 
+  export type NestedDateTimeWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel>
+    notIn?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel>
+    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    not?: NestedDateTimeWithAggregatesFilter<$PrismaModel> | Date | string
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedDateTimeFilter<$PrismaModel>
+    _max?: NestedDateTimeFilter<$PrismaModel>
+  }
+
   export type RoomCreateWithoutOwnerInput = {
     id?: string
     roomId: string
     maxPlayers?: number
     accessCode?: string | null
+    ownerName: string
     gameMode?: string
     maxRounds?: number
     pointsToWin?: number
@@ -5654,6 +5744,7 @@ export namespace Prisma {
     roomId: string
     maxPlayers?: number
     accessCode?: string | null
+    ownerName: string
     gameMode?: string
     maxRounds?: number
     pointsToWin?: number
@@ -5699,6 +5790,7 @@ export namespace Prisma {
     maxPlayers?: IntFilter<"Room"> | number
     accessCode?: StringNullableFilter<"Room"> | string | null
     ownerId?: StringFilter<"Room"> | string
+    ownerName?: StringFilter<"Room"> | string
     gameMode?: StringFilter<"Room"> | string
     maxRounds?: IntFilter<"Room"> | number
     pointsToWin?: IntFilter<"Room"> | number
@@ -5715,8 +5807,10 @@ export namespace Prisma {
     hashedPassword?: string | null
     name?: string | null
     email?: string | null
-    emailVerified?: Date | string | null
     image?: string | null
+    gamesPlayed?: number
+    gamesWon?: number
+    totalPoints?: number
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -5727,8 +5821,10 @@ export namespace Prisma {
     hashedPassword?: string | null
     name?: string | null
     email?: string | null
-    emailVerified?: Date | string | null
     image?: string | null
+    gamesPlayed?: number
+    gamesWon?: number
+    totalPoints?: number
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -5755,8 +5851,10 @@ export namespace Prisma {
     hashedPassword?: NullableStringFieldUpdateOperationsInput | string | null
     name?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
-    emailVerified?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     image?: NullableStringFieldUpdateOperationsInput | string | null
+    gamesPlayed?: IntFieldUpdateOperationsInput | number
+    gamesWon?: IntFieldUpdateOperationsInput | number
+    totalPoints?: IntFieldUpdateOperationsInput | number
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -5767,8 +5865,10 @@ export namespace Prisma {
     hashedPassword?: NullableStringFieldUpdateOperationsInput | string | null
     name?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
-    emailVerified?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     image?: NullableStringFieldUpdateOperationsInput | string | null
+    gamesPlayed?: IntFieldUpdateOperationsInput | number
+    gamesWon?: IntFieldUpdateOperationsInput | number
+    totalPoints?: IntFieldUpdateOperationsInput | number
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -5778,6 +5878,7 @@ export namespace Prisma {
     roomId: string
     maxPlayers?: number
     accessCode?: string | null
+    ownerName: string
     gameMode?: string
     maxRounds?: number
     pointsToWin?: number
@@ -5793,6 +5894,7 @@ export namespace Prisma {
     roomId?: StringFieldUpdateOperationsInput | string
     maxPlayers?: IntFieldUpdateOperationsInput | number
     accessCode?: NullableStringFieldUpdateOperationsInput | string | null
+    ownerName?: StringFieldUpdateOperationsInput | string
     gameMode?: StringFieldUpdateOperationsInput | string
     maxRounds?: IntFieldUpdateOperationsInput | number
     pointsToWin?: IntFieldUpdateOperationsInput | number
@@ -5808,6 +5910,7 @@ export namespace Prisma {
     roomId?: StringFieldUpdateOperationsInput | string
     maxPlayers?: IntFieldUpdateOperationsInput | number
     accessCode?: NullableStringFieldUpdateOperationsInput | string | null
+    ownerName?: StringFieldUpdateOperationsInput | string
     gameMode?: StringFieldUpdateOperationsInput | string
     maxRounds?: IntFieldUpdateOperationsInput | number
     pointsToWin?: IntFieldUpdateOperationsInput | number
@@ -5823,6 +5926,7 @@ export namespace Prisma {
     roomId?: StringFieldUpdateOperationsInput | string
     maxPlayers?: IntFieldUpdateOperationsInput | number
     accessCode?: NullableStringFieldUpdateOperationsInput | string | null
+    ownerName?: StringFieldUpdateOperationsInput | string
     gameMode?: StringFieldUpdateOperationsInput | string
     maxRounds?: IntFieldUpdateOperationsInput | number
     pointsToWin?: IntFieldUpdateOperationsInput | number

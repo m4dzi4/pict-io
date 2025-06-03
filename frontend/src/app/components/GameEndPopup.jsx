@@ -4,6 +4,10 @@ import styles from './GameEndPopup.module.css';
 
 const GameEndPopup = ({ winner, scores, gameStats, socket, roomId }) => {
   const router = useRouter();
+  const scoreArray = Object.entries(scores).map(([username, score]) => ({ 
+    username, 
+    score 
+  })).sort((a, b) => b.score - a.score); // Sort by score in descending order;
 
   const handleReturnHome = () => {
     // Po prostu przekieruj na stronę główną - endGame już zajmuje się resztą
@@ -26,10 +30,10 @@ const GameEndPopup = ({ winner, scores, gameStats, socket, roomId }) => {
         
         <h3>Final Scores:</h3>
         <div className={styles.scoresTable}>
-          {Object.entries(scores).map(([playerId, score]) => (
-            <div key={playerId} className={styles.scoreRow}>
-              <span>{playerId === winner.id ? '👑 ' : ''}{playerId}</span>
-              <span>{score} points</span>
+          {scoreArray.map((player, index) => (
+            <div key={index}>
+              <span>{player.username === winner.name ? '👑 ' : ''} {index + 1}. {player.username}</span>
+              <span>{player.score} points</span>
             </div>
           ))}
         </div>
