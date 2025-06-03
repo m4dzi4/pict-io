@@ -1,6 +1,6 @@
 "use client";
 import { SessionProvider } from "next-auth/react";
-import TopBar from "./components/topbar"; // Import the TopBar
+import TopBar from "./components/TopBar.jsx"; // Import the TopBar
 import AuthSync from "./components/AuthSync";
 import "./globals.css"; // Assuming you have global styles
 

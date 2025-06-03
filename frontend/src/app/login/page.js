@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { signIn, useSession } from "next-auth/react";
 import { getApiUrl } from "@/services/api";
 import Link from "next/link";
+import styles from "./Login.module.css";
 
 // Create a client component that uses search params
 function LoginForm() {
@@ -61,6 +62,13 @@ function LoginForm() {
 			setMessage("Username and password are required.");
 			return;
 		}
+	const handleLogin = async (e) => {
+		e.preventDefault();
+		setMessage("");
+		if (!username || !password) {
+			setMessage("Username and password are required.");
+			return;
+		}
 
 		try {
 			const response = await fetch(`${apiUrl}/api/login`, {
@@ -100,6 +108,24 @@ function LoginForm() {
 			setMessage("Google sign-in failed. Please try again.");
 		}
 	};
+	const handleGoogleSignIn = async () => {
+		try {
+			setMessage("Signing in with Google...");
+			const redirectUrl = searchParams.get("redirect") || "/";
+			const result = await signIn("google", {
+				callbackUrl: redirectUrl,
+				redirect: true,
+			});
+
+			if (result?.error) {
+				console.error("Google sign-in error:", result.error);
+				setMessage("Google sign-in failed. Please try again.");
+			}
+		} catch (error) {
+			console.error("Google sign-in error:", error);
+			setMessage("Google sign-in failed. Please try again.");
+		}
+	};
 
 	// Show loading state while NextAuth is loading
 	if (status === "loading") {
@@ -107,49 +133,65 @@ function LoginForm() {
 	}
 
 	return (
-		<div>
-			<h1>Login</h1>
+		<div className={styles.container}>
+			<div className={styles.loginCard}>
+				<h1 className={styles.title}>Welcome Back</h1>
 
-			<button onClick={handleGoogleSignIn}>Sign in with Google</button>
+				<button onClick={handleGoogleSignIn} className={styles.googleButton}>
+					<span className={styles.googleIcon}>🔗</span>
+					Sign in with Google
+				</button>
 
-			<p>or</p>
-
-			<form onSubmit={handleLogin}>
-				<div className="mb-4">
-					<label htmlFor="username">Username</label>
-					<input
-						type="text"
-						id="username"
-						value={username}
-						onChange={(e) => setUsername(e.target.value)}
-						placeholder="Enter your username"
-						required
-					/>
+				<div className={styles.divider}>
+					<span>or</span>
 				</div>
-				<div className="mb-6">
-					<label htmlFor="password">Password</label>
-					<input
-						type="password"
-						id="password"
-						value={password}
-						onChange={(e) => setPassword(e.target.value)}
-						placeholder="Enter your password"
-						required
-					/>
-				</div>
-				<button type="submit">Login</button>
-			</form>
 
-			{message && <p>{message}</p>}
+				<form onSubmit={handleLogin} className={styles.form}>
+					<div className={styles.field}>
+						<label htmlFor="username" className={styles.label}>
+							Username
+						</label>
+						<input
+							type="text"
+							id="username"
+							value={username}
+							onChange={(e) => setUsername(e.target.value)}
+							placeholder="Enter your username"
+							className={styles.input}
+							required
+						/>
+					</div>
 
-			<p>
-				<Link href="/register">Register here</Link>
-			</p>
+					<div className={styles.field}>
+						<label htmlFor="password" className={styles.label}>
+							Password
+						</label>
+						<input
+							type="password"
+							id="password"
+							value={password}
+							onChange={(e) => setPassword(e.target.value)}
+							placeholder="Enter your password"
+							className={styles.input}
+							required
+						/>
+					</div>
+
+					<button type="submit" className={styles.loginButton}>
+						Login
+					</button>
+				</form>
+
+				{message && <p className={styles.message}>{message}</p>}
+
+				<p className={styles.registerLink}>
+					Don't have an account?{" "}
+					<Link href="/register">Register here</Link>
+				</p>
+			</div>
 		</div>
 	);
-}
-
-// Main login page component with suspense boundary
+}// Main login page component with suspense boundary
 export default function LoginPage() {
 	return (
 		<div>
@@ -159,3 +201,4 @@ export default function LoginPage() {
 		</div>
 	);
 }
+
