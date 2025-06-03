@@ -896,9 +896,9 @@ const authenticateToken = (req, res, next) => {
 // Create Room
 app.post("/api/rooms/create", authenticateToken, async (req, res) => {
 	const { settings } = req.body;
-	const creatorUsername = req.user.username; // From JWT
+	creatorUsername = req.user.username; // From JWT
 	// TODO : Add connection between users and rooms in DB
-	const creatorDbId = req.user.userId; // From JWT
+	creatorDbId = req.user.userId; // From JWT
 
 	try {
 		const roomId = await generateRoomId();
@@ -1296,6 +1296,14 @@ io.on("connection", (socket) => {
 			awardDrawerPoints(roomId);
 			endRound(roomId, "all_guessed");
 		}
+
+		// Sprawdź, czy wszyscy gracze odgadli już hasło
+		if (checkIfAllGuessed(roomId)) {
+			console.log(`All players in room ${roomId} guessed the word. Ending round early.`);
+			// Zakończ rundę wcześniej
+			clearTimeout(game.roundTimer);
+			endRound(roomId, "all_guessed");
+		}
 	}
 
 	socket.on("drawing_update", ({ roomId, paths }) => {
@@ -1523,8 +1531,15 @@ io.on("connection", (socket) => {
 				return;
 			}
 
+			// Po obsłudze rysującego, dodaj:
+			if (game.gameStatus === "playing" && checkIfAllGuessed(roomId)) {
+				console.log(`All players guessed after ${removedPlayer.username} disconnected. Ending round early.`);
+				// Zakończ rundę wcześniej - wszyscy odgadli
+				clearTimeout(game.roundTimer);
+				endRound(roomId, "all_guessed");
+			}
 			// Sprawdź czy został tylko jeden gracz
-			if (game.players.length === 1) {
+			else if (game.players.length === 1) {
 				handleSinglePlayerRoom(roomId);
 			}
 			// Sprawdź czy pokój jest pusty
@@ -1677,12 +1692,18 @@ io.on("connection", (socket) => {
 				endRound(roomId, "drawer_left");
 			}
 
+			// Dodaj to po obsłudze rysującego:
+			if (game.gameStatus === "playing" && checkIfAllGuessed(roomId)) {
+				console.log(`All players guessed after ${removedPlayer.username} left. Ending round early.`);
+				// Zakończ rundę wcześniej - wszyscy odgadli
+				clearTimeout(game.roundTimer);
+				endRound(roomId, "all_guessed");
+			}
 			// Sprawdź czy został tylko jeden gracz
-			if (game.players.length === 1) {
+			else if (game.players.length === 1) {
 				handleSinglePlayerRoom(roomId);
 			}
-
-			// Jeśli pokój jest pusty, usuń go
+			// Jeśli pokój jest pusty po usunięciu gracza:
 			else if (game.players.length === 0) {
 				console.log(`Room ${roomId} is empty after player left. Cleaning up.`);
 				await deleteRoomFromDatabase(roomId);
@@ -1913,4 +1934,55 @@ function handleSinglePlayerRoom(roomId) {
 			delete games[roomId];
 		}
 	}, 60000); // 60 sekund
+}
+
+// Dodaj tę funkcję gdzieś po funkcji endRound
+function checkIfAllGuessed(roomId) {
+  const game = games[roomId];
+  if (!game || game.gameStatus !== "playing") return false;
+  
+  // Nie możemy zakończyć, jeśli nie ma słowa kluczowego
+  if (!game.keyword) return false;
+  
+  // Pobierz wszystkich graczy, którzy nie są rysującymi
+  const nonDrawingPlayers = game.players.filter(p => p.id !== game.drawerId);
+  
+  // Jeśli nie ma zgadujących graczy, nie ma co sprawdzać
+  if (nonDrawingPlayers.length === 0) return false;
+  
+  // Sprawdź, czy wszyscy zgadujący już odgadli poprawnie
+  const currentRoundData = game.round_history[game.currentRound];
+  if (!currentRoundData) return false;
+  
+  console.log(`Checking if all guessed for room ${roomId}`);
+  console.log(`Non-drawing players:`, nonDrawingPlayers.map(p => p.username));
+  console.log(`Correct guesses:`, currentRoundData.correct_guesses);
+  
+  // Sprawdź, czy wszyscy gracze zgadli
+  for (const player of nonDrawingPlayers) {
+    // Sprawdź, czy gracz jest w tablicy correct_guesses
+    const hasGuessedCorrectly = currentRoundData.correct_guesses.some(
+      guess => {
+        // Sprawdź, czy zgadywanie jest obiektem (nowy format)
+        if (typeof guess === 'object') {
+          return guess.socketId === player.id || 
+                 (player.dbUserId && guess.dbUserId === player.dbUserId);
+        }
+        // Jeśli zgadywanie to tylko ID (stary format)
+        return guess === player.id || 
+               (player.dbUserId && guess === player.dbUserId);
+      }
+    );
+    
+    console.log(`Player ${player.username} has guessed correctly: ${hasGuessedCorrectly}`);
+    
+    // Jeśli którykolwiek gracz nie odgadł, zwróć false
+    if (!hasGuessedCorrectly) {
+      return false;
+    }
+  }
+  
+  // Wszyscy odgadli
+  console.log(`All remaining players in room ${roomId} have guessed correctly!`);
+  return true;
 }
