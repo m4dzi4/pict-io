@@ -15,7 +15,13 @@ app.use(
 );
 app.use(express.json());
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+	datasources: {
+		db: {
+			url: process.env.DATABASE_URL,
+		},
+	},
+});
 const server = http.createServer(app);
 const io = new Server(server, {
 	cors: {
@@ -1299,7 +1305,9 @@ io.on("connection", (socket) => {
 
 		// Sprawdź, czy wszyscy gracze odgadli już hasło
 		if (checkIfAllGuessed(roomId)) {
-			console.log(`All players in room ${roomId} guessed the word. Ending round early.`);
+			console.log(
+				`All players in room ${roomId} guessed the word. Ending round early.`
+			);
 			// Zakończ rundę wcześniej
 			clearTimeout(game.roundTimer);
 			endRound(roomId, "all_guessed");
@@ -1533,7 +1541,9 @@ io.on("connection", (socket) => {
 
 			// Po obsłudze rysującego, dodaj:
 			if (game.gameStatus === "playing" && checkIfAllGuessed(roomId)) {
-				console.log(`All players guessed after ${removedPlayer.username} disconnected. Ending round early.`);
+				console.log(
+					`All players guessed after ${removedPlayer.username} disconnected. Ending round early.`
+				);
 				// Zakończ rundę wcześniej - wszyscy odgadli
 				clearTimeout(game.roundTimer);
 				endRound(roomId, "all_guessed");
@@ -1694,7 +1704,9 @@ io.on("connection", (socket) => {
 
 			// Dodaj to po obsłudze rysującego:
 			if (game.gameStatus === "playing" && checkIfAllGuessed(roomId)) {
-				console.log(`All players guessed after ${removedPlayer.username} left. Ending round early.`);
+				console.log(
+					`All players guessed after ${removedPlayer.username} left. Ending round early.`
+				);
 				// Zakończ rundę wcześniej - wszyscy odgadli
 				clearTimeout(game.roundTimer);
 				endRound(roomId, "all_guessed");
@@ -1938,51 +1950,61 @@ function handleSinglePlayerRoom(roomId) {
 
 // Dodaj tę funkcję gdzieś po funkcji endRound
 function checkIfAllGuessed(roomId) {
-  const game = games[roomId];
-  if (!game || game.gameStatus !== "playing") return false;
-  
-  // Nie możemy zakończyć, jeśli nie ma słowa kluczowego
-  if (!game.keyword) return false;
-  
-  // Pobierz wszystkich graczy, którzy nie są rysującymi
-  const nonDrawingPlayers = game.players.filter(p => p.id !== game.drawerId);
-  
-  // Jeśli nie ma zgadujących graczy, nie ma co sprawdzać
-  if (nonDrawingPlayers.length === 0) return false;
-  
-  // Sprawdź, czy wszyscy zgadujący już odgadli poprawnie
-  const currentRoundData = game.round_history[game.currentRound];
-  if (!currentRoundData) return false;
-  
-  console.log(`Checking if all guessed for room ${roomId}`);
-  console.log(`Non-drawing players:`, nonDrawingPlayers.map(p => p.username));
-  console.log(`Correct guesses:`, currentRoundData.correct_guesses);
-  
-  // Sprawdź, czy wszyscy gracze zgadli
-  for (const player of nonDrawingPlayers) {
-    // Sprawdź, czy gracz jest w tablicy correct_guesses
-    const hasGuessedCorrectly = currentRoundData.correct_guesses.some(
-      guess => {
-        // Sprawdź, czy zgadywanie jest obiektem (nowy format)
-        if (typeof guess === 'object') {
-          return guess.socketId === player.id || 
-                 (player.dbUserId && guess.dbUserId === player.dbUserId);
-        }
-        // Jeśli zgadywanie to tylko ID (stary format)
-        return guess === player.id || 
-               (player.dbUserId && guess === player.dbUserId);
-      }
-    );
-    
-    console.log(`Player ${player.username} has guessed correctly: ${hasGuessedCorrectly}`);
-    
-    // Jeśli którykolwiek gracz nie odgadł, zwróć false
-    if (!hasGuessedCorrectly) {
-      return false;
-    }
-  }
-  
-  // Wszyscy odgadli
-  console.log(`All remaining players in room ${roomId} have guessed correctly!`);
-  return true;
+	const game = games[roomId];
+	if (!game || game.gameStatus !== "playing") return false;
+
+	// Nie możemy zakończyć, jeśli nie ma słowa kluczowego
+	if (!game.keyword) return false;
+
+	// Pobierz wszystkich graczy, którzy nie są rysującymi
+	const nonDrawingPlayers = game.players.filter((p) => p.id !== game.drawerId);
+
+	// Jeśli nie ma zgadujących graczy, nie ma co sprawdzać
+	if (nonDrawingPlayers.length === 0) return false;
+
+	// Sprawdź, czy wszyscy zgadujący już odgadli poprawnie
+	const currentRoundData = game.round_history[game.currentRound];
+	if (!currentRoundData) return false;
+
+	console.log(`Checking if all guessed for room ${roomId}`);
+	console.log(
+		`Non-drawing players:`,
+		nonDrawingPlayers.map((p) => p.username)
+	);
+	console.log(`Correct guesses:`, currentRoundData.correct_guesses);
+
+	// Sprawdź, czy wszyscy gracze zgadli
+	for (const player of nonDrawingPlayers) {
+		// Sprawdź, czy gracz jest w tablicy correct_guesses
+		const hasGuessedCorrectly = currentRoundData.correct_guesses.some(
+			(guess) => {
+				// Sprawdź, czy zgadywanie jest obiektem (nowy format)
+				if (typeof guess === "object") {
+					return (
+						guess.socketId === player.id ||
+						(player.dbUserId && guess.dbUserId === player.dbUserId)
+					);
+				}
+				// Jeśli zgadywanie to tylko ID (stary format)
+				return (
+					guess === player.id || (player.dbUserId && guess === player.dbUserId)
+				);
+			}
+		);
+
+		console.log(
+			`Player ${player.username} has guessed correctly: ${hasGuessedCorrectly}`
+		);
+
+		// Jeśli którykolwiek gracz nie odgadł, zwróć false
+		if (!hasGuessedCorrectly) {
+			return false;
+		}
+	}
+
+	// Wszyscy odgadli
+	console.log(
+		`All remaining players in room ${roomId} have guessed correctly!`
+	);
+	return true;
 }
