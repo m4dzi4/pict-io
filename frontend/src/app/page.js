@@ -495,7 +495,7 @@ export default function HomePage() {
 
 	return (
 		<div>
-			<h1>Pict-IO</h1>
+			
 			{loggedInUser && <div>Welcome, {loggedInUser.username}!</div>}
 			{authMessage && <div>{authMessage}</div>}
 			{renderUserStatistics()}
