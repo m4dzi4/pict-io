@@ -1,18 +1,19 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { signIn, useSession } from "next-auth/react"; // Add useSession import
+import { signIn, useSession } from "next-auth/react";
+import { getApiUrl } from "@/services/api";
 import Link from "next/link";
 
-export default function LoginPage() {
+// Create a client component that uses search params
+function LoginForm() {
 	const [username, setUsername] = useState("");
 	const [password, setPassword] = useState("");
 	const [message, setMessage] = useState("");
 	const router = useRouter();
 	const searchParams = useSearchParams();
-
-	// Add the useSession hook
 	const { data: session, status } = useSession();
+	const apiUrl = getApiUrl();
 
 	useEffect(() => {
 		if (searchParams.get("registered") === "true") {
@@ -37,7 +38,7 @@ export default function LoginPage() {
 		};
 
 		checkAuth();
-	}, [searchParams, router, session, status]); // Add session and status as dependencies
+	}, [searchParams, router, session, status]);
 
 	// Handle successful Google sign-in
 	useEffect(() => {
@@ -62,7 +63,7 @@ export default function LoginPage() {
 		}
 
 		try {
-			const response = await fetch(`${process.env.BACKEND_URL}/api/login`, {
+			const response = await fetch(`${apiUrl}/api/login`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ username, password }),
@@ -107,45 +108,54 @@ export default function LoginPage() {
 
 	return (
 		<div>
-			<div>
-				<h1>Login</h1>
+			<h1>Login</h1>
 
-				<button onClick={handleGoogleSignIn}>Sign in with Google</button>
+			<button onClick={handleGoogleSignIn}>Sign in with Google</button>
 
-				<p>or</p>
+			<p>or</p>
 
-				<form onSubmit={handleLogin}>
-					<div className="mb-4">
-						<label htmlFor="username">Username</label>
-						<input
-							type="text"
-							id="username"
-							value={username}
-							onChange={(e) => setUsername(e.target.value)}
-							placeholder="Enter your username"
-							required
-						/>
-					</div>
-					<div className="mb-6">
-						<label htmlFor="password">Password</label>
-						<input
-							type="password"
-							id="password"
-							value={password}
-							onChange={(e) => setPassword(e.target.value)}
-							placeholder="Enter your password"
-							required
-						/>
-					</div>
-					<button type="submit">Login</button>
-				</form>
+			<form onSubmit={handleLogin}>
+				<div className="mb-4">
+					<label htmlFor="username">Username</label>
+					<input
+						type="text"
+						id="username"
+						value={username}
+						onChange={(e) => setUsername(e.target.value)}
+						placeholder="Enter your username"
+						required
+					/>
+				</div>
+				<div className="mb-6">
+					<label htmlFor="password">Password</label>
+					<input
+						type="password"
+						id="password"
+						value={password}
+						onChange={(e) => setPassword(e.target.value)}
+						placeholder="Enter your password"
+						required
+					/>
+				</div>
+				<button type="submit">Login</button>
+			</form>
 
-				{message && <p>{message}</p>}
+			{message && <p>{message}</p>}
 
-				<p>
-					<Link href="/register">Register here</Link>
-				</p>
-			</div>
+			<p>
+				<Link href="/register">Register here</Link>
+			</p>
+		</div>
+	);
+}
+
+// Main login page component with suspense boundary
+export default function LoginPage() {
+	return (
+		<div>
+			<Suspense fallback={<div>Loading...</div>}>
+				<LoginForm />
+			</Suspense>
 		</div>
 	);
 }

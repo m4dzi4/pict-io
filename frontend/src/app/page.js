@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { jwtDecode } from "jwt-decode";
+import { getApiUrl } from "@/services/api";
 
 // let socketClient = null; // Remove
 
@@ -27,6 +28,7 @@ export default function HomePage() {
 	const router = useRouter();
 	const [userStatistics, setUserStatistics] = useState(null);
 	const [showLeaderboard, setShowLeaderboard] = useState(false);
+	const apiUrl = getApiUrl();
 
 	// Add this function to fetch user statistics
 	const fetchUserStatistics = async () => {
@@ -34,14 +36,11 @@ export default function HomePage() {
 
 		try {
 			const token = localStorage.getItem("jwtToken");
-			const response = await fetch(
-				`${process.env.BACKEND_URL}/api/user/statistics`,
-				{
-					headers: {
-						Authorization: `Bearer ${token}`,
-					},
-				}
-			);
+			const response = await fetch(`${apiUrl}/api/user/statistics`, {
+				headers: {
+					Authorization: `Bearer ${token}`,
+				},
+			});
 
 			if (!response.ok) {
 				throw new Error(`HTTP error! Status: ${response.status}`);
@@ -59,9 +58,7 @@ export default function HomePage() {
 	// Add this function to fetch leaderboard
 	const fetchLeaderboard = async () => {
 		try {
-			const response = await fetch(
-				`${process.env.BACKEND_URL}/api/leaderboard`
-			);
+			const response = await fetch(`${apiUrl}/api/leaderboard`);
 
 			if (!response.ok) {
 				throw new Error(`HTTP error! Status: ${response.status}`);
@@ -80,9 +77,7 @@ export default function HomePage() {
 	const fetchActiveRooms = async () => {
 		setIsLoadingRooms(true);
 		try {
-			const response = await fetch(
-				`${process.env.BACKEND_URL}/api/rooms/active`
-			);
+			const response = await fetch(`${apiUrl}/api/rooms/active`);
 			if (!response.ok) {
 				throw new Error(`HTTP error! status: ${response.status}`);
 			}
@@ -443,17 +438,14 @@ export default function HomePage() {
 		}
 
 		try {
-			const response = await fetch(
-				`${process.env.BACKEND_URL}/api/rooms/create`,
-				{
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-						Authorization: `Bearer ${token}`,
-					},
-					body: JSON.stringify({ settings: newRoomSettings }),
-				}
-			);
+			const response = await fetch(`${apiUrl}/api/rooms/create`, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Authorization: `Bearer ${token}`,
+				},
+				body: JSON.stringify({ settings: newRoomSettings }),
+			});
 			const data = await response.json();
 			if (data.success && data.roomId) {
 				console.log("Room created via API:", data.roomId);
@@ -482,7 +474,7 @@ export default function HomePage() {
 		}
 		try {
 			const response = await fetch(
-				`${process.env.BACKEND_URL}/api/rooms/validate/${joinRoomCode.trim()}`
+				`${apiUrl}/api/rooms/validate/${joinRoomCode.trim()}`
 			);
 			const data = await response.json();
 			if (data.success) {

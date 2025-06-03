@@ -1,6 +1,16 @@
 import NextAuth from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 
+const getBackendUrl = () => {
+	// Check if running in development mode (not Docker)
+	if (process.env.NODE_ENV === "development") {
+		return "http://localhost:4000";
+	}
+
+	// Otherwise use the environment variable (Docker)
+	return process.env.BACKEND_URL || "http://backend:4000";
+};
+
 const handler = NextAuth({
 	providers: [
 		GoogleProvider({
@@ -19,19 +29,17 @@ const handler = NextAuth({
 		async signIn({ user, account, profile }) {
 			if (account?.provider === "google") {
 				try {
-					const response = await fetch(
-						`${process.env.BACKEND_URL}/api/auth/google`,
-						{
-							method: "POST",
-							headers: { "Content-Type": "application/json" },
-							body: JSON.stringify({
-								googleId: user.id,
-								email: user.email,
-								name: user.name,
-								image: user.image,
-							}),
-						}
-					);
+					const backendUrl = getBackendUrl();
+					const response = await fetch(`${backendUrl}/api/auth/google`, {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({
+							googleId: user.id,
+							email: user.email,
+							name: user.name,
+							image: user.image,
+						}),
+					});
 
 					const result = await response.json();
 					if (result.success) {

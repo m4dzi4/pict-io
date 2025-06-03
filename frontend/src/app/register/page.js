@@ -2,12 +2,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { getApiUrl } from "@/services/api";
 
 export default function RegisterPage() {
 	const [username, setUsername] = useState("");
 	const [password, setPassword] = useState("");
 	const [message, setMessage] = useState("");
 	const router = useRouter();
+	const apiUrl = getApiUrl();
 
 	const handleRegister = async (e) => {
 		e.preventDefault();
@@ -22,7 +24,7 @@ export default function RegisterPage() {
 		}
 
 		try {
-			const response = await fetch(`${process.env.BACKEND_URL}/api/register`, {
+			const response = await fetch(`${apiUrl}/api/register`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ username, password }),
