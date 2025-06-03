@@ -55,13 +55,7 @@ function LoginForm() {
 		}
 	}, [session, router, searchParams]);
 
-	const handleLogin = async (e) => {
-		e.preventDefault();
-		setMessage("");
-		if (!username || !password) {
-			setMessage("Username and password are required.");
-			return;
-		}
+	
 	const handleLogin = async (e) => {
 		e.preventDefault();
 		setMessage("");
@@ -90,24 +84,7 @@ function LoginForm() {
 		}
 	};
 
-	const handleGoogleSignIn = async () => {
-		try {
-			setMessage("Signing in with Google...");
-			const redirectUrl = searchParams.get("redirect") || "/";
-			const result = await signIn("google", {
-				callbackUrl: redirectUrl,
-				redirect: true,
-			});
-
-			if (result?.error) {
-				console.error("Google sign-in error:", result.error);
-				setMessage("Google sign-in failed. Please try again.");
-			}
-		} catch (error) {
-			console.error("Google sign-in error:", error);
-			setMessage("Google sign-in failed. Please try again.");
-		}
-	};
+	
 	const handleGoogleSignIn = async () => {
 		try {
 			setMessage("Signing in with Google...");
