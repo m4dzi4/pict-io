@@ -7,14 +7,19 @@ const bcrypt = require("bcryptjs"); // Import bcryptjs
 const jwt = require("jsonwebtoken"); // Import jsonwebtoken
 
 const app = express();
-app.use(cors());
+app.use(
+	cors({
+		origin: process.env.FRONTEND_URL,
+		credentials: true,
+	})
+);
 app.use(express.json());
 
 const prisma = new PrismaClient();
 const server = http.createServer(app);
 const io = new Server(server, {
 	cors: {
-		origin: "http://localhost:3000", // frontend origin
+		origin: process.env.FRONTEND_URL, // frontend origin
 		methods: ["GET", "POST"],
 	},
 });

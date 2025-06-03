@@ -35,7 +35,7 @@ export default function HomePage() {
 		try {
 			const token = localStorage.getItem("jwtToken");
 			const response = await fetch(
-				"http://localhost:4000/api/user/statistics",
+				`${process.env.BACKEND_URL}/api/user/statistics`,
 				{
 					headers: {
 						Authorization: `Bearer ${token}`,
@@ -59,7 +59,9 @@ export default function HomePage() {
 	// Add this function to fetch leaderboard
 	const fetchLeaderboard = async () => {
 		try {
-			const response = await fetch("http://localhost:4000/api/leaderboard");
+			const response = await fetch(
+				`${process.env.BACKEND_URL}/api/leaderboard`
+			);
 
 			if (!response.ok) {
 				throw new Error(`HTTP error! Status: ${response.status}`);
@@ -78,7 +80,9 @@ export default function HomePage() {
 	const fetchActiveRooms = async () => {
 		setIsLoadingRooms(true);
 		try {
-			const response = await fetch("http://localhost:4000/api/rooms/active");
+			const response = await fetch(
+				`${process.env.BACKEND_URL}/api/rooms/active`
+			);
 			if (!response.ok) {
 				throw new Error(`HTTP error! status: ${response.status}`);
 			}
@@ -439,14 +443,17 @@ export default function HomePage() {
 		}
 
 		try {
-			const response = await fetch("http://localhost:4000/api/rooms/create", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					Authorization: `Bearer ${token}`,
-				},
-				body: JSON.stringify({ settings: newRoomSettings }),
-			});
+			const response = await fetch(
+				`${process.env.BACKEND_URL}/api/rooms/create`,
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						Authorization: `Bearer ${token}`,
+					},
+					body: JSON.stringify({ settings: newRoomSettings }),
+				}
+			);
 			const data = await response.json();
 			if (data.success && data.roomId) {
 				console.log("Room created via API:", data.roomId);
@@ -475,7 +482,7 @@ export default function HomePage() {
 		}
 		try {
 			const response = await fetch(
-				`http://localhost:4000/api/rooms/validate/${joinRoomCode.trim()}`
+				`${process.env.BACKEND_URL}/api/rooms/validate/${joinRoomCode.trim()}`
 			);
 			const data = await response.json();
 			if (data.success) {

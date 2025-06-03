@@ -60,7 +60,7 @@ export default function GamePage() {
 	// function to retrieve roomID
 	useEffect(() => {
 		setRoomId(params.roomId);
-		const newSocket = io("http://localhost:4000");
+		const newSocket = io(process.env.BACKEND_URL);
 		socketRef.current = newSocket;
 
 		newSocket.on("connect", () => {

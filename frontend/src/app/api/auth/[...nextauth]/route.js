@@ -20,7 +20,7 @@ const handler = NextAuth({
 			if (account?.provider === "google") {
 				try {
 					const response = await fetch(
-						`http://localhost:4000/api/auth/google`,
+						`${process.env.BACKEND_URL}/api/auth/google`,
 						{
 							method: "POST",
 							headers: { "Content-Type": "application/json" },
