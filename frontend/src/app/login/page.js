@@ -55,7 +55,6 @@ function LoginForm() {
 		}
 	}, [session, router, searchParams]);
 
-	
 	const handleLogin = async (e) => {
 		e.preventDefault();
 		setMessage("");
@@ -84,7 +83,6 @@ function LoginForm() {
 		}
 	};
 
-	
 	const handleGoogleSignIn = async () => {
 		try {
 			setMessage("Signing in with Google...");
@@ -162,13 +160,13 @@ function LoginForm() {
 				{message && <p className={styles.message}>{message}</p>}
 
 				<p className={styles.registerLink}>
-					Don't have an account?{" "}
+					Don&apos;t have an account?{" "}
 					<Link href="/register">Register here</Link>
 				</p>
 			</div>
 		</div>
 	);
-}// Main login page component with suspense boundary
+} // Main login page component with suspense boundary
 export default function LoginPage() {
 	return (
 		<div>
@@ -178,4 +176,3 @@ export default function LoginPage() {
 		</div>
 	);
 }
-
