@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { jwtDecode } from "jwt-decode";
 import { getApiUrl } from "@/services/api";
 import CreateRoom from "./components/CreateRoom";
+import Statistics from "./components/Statistics";
 
 export default function HomePage() {
 	const [activeRooms, setActiveRooms] = useState([]);
@@ -14,34 +15,8 @@ export default function HomePage() {
 	const [loggedInUser, setLoggedInUser] = useState(null);
 	const [authMessage, setAuthMessage] = useState("");
 	const router = useRouter();
-	const [userStatistics, setUserStatistics] = useState(null);
 	const [showLeaderboard, setShowLeaderboard] = useState(false);
 	const apiUrl = getApiUrl();
-
-	// Add this function to fetch user statistics
-	const fetchUserStatistics = async () => {
-		if (!loggedInUser) return;
-
-		try {
-			const token = localStorage.getItem("jwtToken");
-			const response = await fetch(`${apiUrl}/api/user/statistics`, {
-				headers: {
-					Authorization: `Bearer ${token}`,
-				},
-			});
-
-			if (!response.ok) {
-				throw new Error(`HTTP error! Status: ${response.status}`);
-			}
-
-			const data = await response.json();
-			if (data.success) {
-				setUserStatistics(data.statistics);
-			}
-		} catch (error) {
-			console.error("Error fetching user statistics:", error);
-		}
-	};
 
 	// Add this function to fetch leaderboard
 	const fetchLeaderboard = async () => {
@@ -101,54 +76,13 @@ export default function HomePage() {
 	// Update useEffect to fetch statistics when the user logs in
 	useEffect(() => {
 		if (loggedInUser) {
-			fetchUserStatistics();
+			fetchLeaderboard();
 		}
-
-		fetchLeaderboard();
 	}, [loggedInUser]);
 
 	const handleRefreshRooms = () => {
 		console.log("Refreshing room list...");
 		fetchActiveRooms();
-	};
-
-	// Add this function to render user statistics
-	const renderUserStatistics = () => {
-		if (!loggedInUser || !userStatistics) return null;
-
-		return (
-			<div>
-				<h3>Your Statistics</h3>
-				<div
-					style={{
-						display: "grid",
-						gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
-						gap: "16px",
-					}}
-				>
-					<div>
-						<div>{userStatistics.gamesPlayed}</div>
-						<div style={{ fontSize: "14px" }}>Games Played</div>
-					</div>
-					<div>
-						<div>{userStatistics.gamesWon}</div>
-						<div style={{ fontSize: "14px" }}>Games Won</div>
-					</div>
-					<div>
-						<div>{userStatistics.totalPoints.toLocaleString()}</div>
-						<div style={{ fontSize: "14px" }}>Total Points</div>
-					</div>
-					<div>
-						<div>{userStatistics.winRate}%</div>
-						<div style={{ fontSize: "14px" }}>Win Rate</div>
-					</div>
-					<div>
-						<div>{userStatistics.pointsPerGame}</div>
-						<div style={{ fontSize: "14px" }}>Points/Game</div>
-					</div>
-				</div>
-			</div>
-		);
 	};
 
 	// Add this function to render the leaderboard
@@ -417,7 +351,7 @@ export default function HomePage() {
 			
 			{loggedInUser && <div>Welcome, {loggedInUser.username}!</div>}
 			{authMessage && <div>{authMessage}</div>}
-			{renderUserStatistics()}
+			<Statistics loggedInUser={loggedInUser} />
 			<div>
 				<h2>Create New Room</h2>
 				<button onClick={handleConfigureRoomClick}>

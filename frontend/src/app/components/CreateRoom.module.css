@@ -23,9 +23,11 @@
   width: 90%;
   max-width: 600px;
   max-height: 90vh;
-  overflow: hidden; /* This ensures content doesn't break the border radius */
+  overflow: hidden;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
   animation: slideIn 0.3s ease-out;
+  display: flex;
+  flex-direction: column;
 }
 
 @keyframes slideIn {
@@ -43,10 +45,11 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 24px 24px 16px 24px; /* Reduced bottom padding */
+  padding: 24px 24px 16px 24px;
   border-bottom: 1px solid #e5e7eb;
-  background: white; /* Ensure background is white */
-  border-radius: 16px 16px 0 0; /* Round only top corners */
+  background: white;
+  border-radius: 16px 16px 0 0;
+  flex-shrink: 0;
 }
 
 .title {
@@ -79,9 +82,10 @@
 
 .content {
   padding: 24px;
-  background: white; /* Ensure background is white */
-  max-height: calc(90vh - 140px); /* Account for header and footer */
+  background: white;
+  flex: 1;
   overflow-y: auto;
+  min-height: 0;
 }
 
 .settingsGrid {
@@ -178,14 +182,17 @@
   gap: 8px;
 }
 
+/* FIXED: Ensure footer is always visible and properly styled */
 .footer {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
   padding: 24px;
   border-top: 1px solid #e5e7eb;
-  background: white; /* Ensure background is white */
-  border-radius: 0 0 16px 16px; /* Round only bottom corners */
+  background: white;
+  border-radius: 0 0 16px 16px;
+  flex-shrink: 0;
+  min-height: auto;
 }
 
 .cancelButton {
@@ -198,6 +205,7 @@
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
+  min-width: 80px;
 }
 
 .cancelButton:hover {
@@ -205,79 +213,93 @@
   border-color: #9ca3af;
 }
 
+/* FIXED: Make create button more prominent and ensure it's visible */
 .createButton {
-  background: #1e40af;
-  color: white;
-  border: none;
-  padding: 12px 24px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 4px rgba(30, 64, 175, 0.2);
+  background: #1e40af !important;
+  color: white !important;
+  border: none !important;
+  padding: 12px 24px !important;
+  border-radius: 8px !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  box-shadow: 0 2px 4px rgba(30, 64, 175, 0.2) !important;
+  min-width: 150px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 10 !important;
+  position: relative !important;
 }
 
 .createButton:hover {
-  background: #1d4ed8;
-  box-shadow: 0 4px 8px rgba(30, 64, 175, 0.3);
-  transform: translateY(-1px);
+  background: #1d4ed8 !important;
+  box-shadow: 0 4px 8px rgba(30, 64, 175, 0.3) !important;
+  transform: translateY(-1px) !important;
 }
 
 .createButton:active {
-  transform: translateY(0);
-  box-shadow: 0 2px 4px rgba(30, 64, 175, 0.2);
+  transform: translateY(0) !important;
+  box-shadow: 0 2px 4px rgba(30, 64, 175, 0.2) !important;
 }
 
-/* Responsive design */
+.createButton:focus {
+  outline: none !important;
+  box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.3) !important;
+}
+
+/* Responsive adjustments */
 @media (max-width: 768px) {
   .modal {
     width: 95%;
-    margin: 20px;
     max-height: 95vh;
-    border-radius: 12px; /* Smaller radius on mobile */
   }
-  
+
   .header {
-    padding: 16px;
-    border-radius: 12px 12px 0 0; /* Match smaller radius */
+    padding: 20px 20px 12px 20px;
   }
-  
+
   .content {
-    padding: 16px;
+    padding: 20px;
   }
-  
+
   .footer {
-    padding: 16px;
+    padding: 20px;
     flex-direction: column;
-    border-radius: 0 0 12px 12px; /* Match smaller radius */
+    gap: 12px;
   }
-  
+
   .cancelButton,
   .createButton {
     width: 100%;
-    justify-content: center;
+    min-width: auto;
+  }
+
+  .title {
+    font-size: 1.3rem;
   }
 }
 
 @media (max-width: 480px) {
   .modal {
-    border-radius: 8px; /* Even smaller radius on very small screens */
+    width: 98%;
+    margin: 1%;
   }
-  
+
   .header {
-    border-radius: 8px 8px 0 0;
+    padding: 16px;
   }
-  
+
+  .content {
+    padding: 16px;
+  }
+
   .footer {
-    border-radius: 0 0 8px 8px;
+    padding: 16px;
   }
-  
-  .title {
-    font-size: 1.25rem;
-  }
-  
-  .summaryContent {
-    font-size: 13px;
+
+  .settingsGrid {
+    gap: 16px;
   }
 }
