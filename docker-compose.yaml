@@ -2,38 +2,41 @@ version: '3.8'
 
 services:
   frontend:
-    build: 
-      context: ./frontend
+    build: ./frontend
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_BACKEND_URL=http://localhost:4000 # For client-side browser requests
-      - BACKEND_URL=http://backend:4000
+      - NEXT_PUBLIC_BACKEND_URL=http://localhost:4000
+ # For client-side browser requests
+      - BACKEND_URL=http://localhost:4000
+
       - NEXT_PUBLIC_API_URL=http://localhost:4000
+
       - NEXTAUTH_SECRET=your-nextauth-secret-change-in-production
       - NEXTAUTH_URL=http://localhost:3000
+
     depends_on:
       - backend
-    restart: unless-stopped
-    mem_limit: 1g
+    networks:
+      - app-network
 
   backend:
-    build:
-      context: ./backend
+    build: ./backend
     ports:
       - "4000:4000"
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/pictio
       - JWT_SECRET=your-secret-key-change-in-production
-      - FRONTEND_URL=http://frontend:3000
+      - FRONTEND_URL=http://localhost:3000
+
+
     depends_on:
-      db:
-        condition: service_healthy
-    restart: unless-stopped
-    mem_limit: 1g
+      - db
+    networks:
+      - app-network
 
   db:
-    image: postgres:14-alpine
+    image: postgres:17-alpine
     ports:
       - "5432:5432"
     environment:
@@ -42,12 +45,12 @@ services:
       - POSTGRES_DB=pictio
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+    networks:
+      - app-network
 
 volumes:
   postgres_data:
+
+networks:
+  app-network:
+    driver: bridge
