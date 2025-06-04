@@ -22,6 +22,7 @@ ENV FRONTEND_URL=http://frontend:3000
 
 # Expose the port
 EXPOSE 4000
+EXPOSE 5555
 
 # Start the app with a script that ensures the database is ready
-CMD ["sh", "-c", "npx prisma migrate deploy && node index.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node seed.js && node index.js"]

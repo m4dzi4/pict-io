@@ -31,7 +31,6 @@ COPY --from=builder /app/node_modules ./node_modules
 ENV NODE_ENV=production
 ENV BACKEND_URL=http://backend:4000
 
-
 # Expose the port
 EXPOSE 3000
 
