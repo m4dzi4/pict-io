@@ -1289,38 +1289,18 @@ io.on("connection", (socket) => {
 
 		// 5. Check if all guessers have guessed correctly - FIXED logic
 		const allGuessers = game.players.filter((p) => p.id !== game.drawerId);
-		const correctGuessers =
-			game.round_history[game.currentRound].correct_guesses;
+		const correctGuessers = game.round_history[game.currentRound].correct_guesses;
 
-		console.log(
-			`All guessers: ${allGuessers.map((p) => p.username).join(", ")}`
-		);
-		console.log(
-			`Correct guessers objects:`,
-			correctGuessers.map((g) => g.username)
-		);
+		console.log(`All guessers: ${allGuessers.map((p) => p.username).join(", ")}`);
+		console.log(`Correct guessers objects:`, correctGuessers.map((g) => g.username));
 		console.log(`drawerId: ${game.drawerId}`);
 
-		// FIXED: Since correct_guesses now stores objects, compare with the socketId property
-		const allGuessedCorrectly = allGuessers.every((p) => {
-			return correctGuessers.some(
-				(guess) =>
-					guess.socketId === p.id ||
-					(p.dbUserId && guess.dbUserId === p.dbUserId)
-			);
-		});
-
-		if (allGuessers.length > 0 && allGuessedCorrectly) {
-			awardDrawerPoints(roomId);
-			endRound(roomId, "all_guessed");
-		}
-
-		// Sprawdź, czy wszyscy gracze odgadli już hasło
+		// Use the centralized checkIfAllGuessed function instead of duplicate logic
 		if (checkIfAllGuessed(roomId)) {
-			console.log(
-				`All players in room ${roomId} guessed the word. Ending round early.`
-			);
-			// Zakończ rundę wcześniej
+			console.log(`All players in room ${roomId} guessed the word. Ending round early.`);
+			// Award drawer points before ending round
+			awardDrawerPoints(roomId);
+			// End round early
 			clearTimeout(game.roundTimer);
 			endRound(roomId, "all_guessed");
 		}
