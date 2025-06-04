@@ -805,9 +805,9 @@ export default function GamePage() {
 			style={{
 				display: "flex",
 				height: "100vh",
-				gap: "8px",
-				background: "#eee",
-				padding: "8px",
+				gap: "12px",
+				background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+				padding: "12px",
 				boxSizing: "border-box",
 			}}
 		>
@@ -817,26 +817,37 @@ export default function GamePage() {
 					flex: 2,
 					display: "flex",
 					flexDirection: "column",
-					background: "#fff",
-					border: "1px solid #ccc",
-					borderRadius: 4,
-					padding: 8,
+					background: "#ffffff",
+					border: "2px solid #e5e7eb",
+					borderRadius: "16px",
+					padding: "16px",
 					minWidth: 0,
+					boxShadow: "0 8px 32px rgba(0, 0, 0, 0.1)",
+					overflow: "hidden",
 				}}
 			>
-				{/* Room and Status */}
-				<div style={{ marginBottom: 8 }}>
-					{/* Pierwsza linia: Room info + Destroy button */}
+				{/* Room and Status - USUNIĘTO height: "20%" */}
+				<div style={{ 
+					marginBottom: "12px", 
+					flex: "0 0 auto",
+					maxHeight: "50vh",
+					overflowY: "auto"
+				}}>
+					{/* Room info + buttons */}
 					<div
 						style={{
 							display: "flex",
 							justifyContent: "space-between",
 							alignItems: "center",
-							marginBottom: "4px",
+							marginBottom: "8px",
+							padding: "12px",
+							background: "linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)",
+							borderRadius: "12px",
+							border: "1px solid #e5e7eb",
 						}}
 					>
-						<div>
-							Room: {game.roomId}, Owner: {getOwnerUsername()}
+						<div style={{ fontWeight: "600", color: "#374151" }}>
+							Room: <span style={{ color: "#1e40af" }}>{game.roomId}</span>, Owner: <span style={{ color: "#059669" }}>{getOwnerUsername()}</span>
 						</div>
 						<div>
 							{/* Przycisk "Leave Game" tylko dla graczy, którzy NIE są właścicielami */}
@@ -845,12 +856,15 @@ export default function GamePage() {
 									onClick={handleLeaveGame}
 									style={{
 										marginRight: "8px",
-										background: "#f0ad4e",
+										background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
 										color: "white",
 										border: "none",
-										padding: "5px 10px",
-										borderRadius: "4px",
+										padding: "8px 16px",
+										borderRadius: "8px",
 										fontSize: "14px",
+										fontWeight: "500",
+										cursor: "pointer",
+										boxShadow: "0 2px 8px rgba(245, 158, 11, 0.3)",
 									}}
 								>
 									Leave Game
@@ -862,12 +876,15 @@ export default function GamePage() {
 								<button
 									onClick={handleDestroyRoom}
 									style={{
-										background: "#ff4d4d",
+										background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
 										color: "white",
 										border: "none",
-										padding: "5px 10px",
-										borderRadius: "4px",
+										padding: "8px 16px",
+										borderRadius: "8px",
 										fontSize: "14px",
+										fontWeight: "500",
+										cursor: "pointer",
+										boxShadow: "0 2px 8px rgba(239, 68, 68, 0.3)",
 									}}
 								>
 									Destroy Room
@@ -876,184 +893,136 @@ export default function GamePage() {
 						</div>
 					</div>
 
-					{/* Druga linia: Start Game button (jeśli potrzebny) */}
-					<div>
-						{isRoomOwner && game.players.length >= 2 && canStartGame && (
-							<button onClick={handleStartGame}>Start Game</button>
+					{/* Start Game button */}
+					<div style={{ marginBottom: "8px" }}>
+						{isRoomOwner && game.players && game.players.length >= 2 && canStartGame && (
+							<button
+								onClick={handleStartGame}
+								style={{
+									background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+									color: "white",
+									border: "none",
+									padding: "12px 24px",
+									borderRadius: "12px",
+									fontSize: "16px",
+									fontWeight: "600",
+									cursor: "pointer",
+									boxShadow: "0 4px 12px rgba(16, 185, 129, 0.3)",
+								}}
+							>
+								🚀 Start Game
+							</button>
 						)}
 					</div>
 
-					{isDrawer &&
-						game.gameStatus === "choosing_word" &&
-						wordChoices.length > 0 && (
-							<div
-								style={{
-									position: "fixed",
-									top: "50%",
-									left: "50%",
-									transform: "translate(-50%, -50%)",
-									background: "white",
-									border: "2px solid #333",
-									borderRadius: "10px",
-									padding: "20px",
-									boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
-									zIndex: 1000,
-									textAlign: "center",
-									minWidth: "400px",
-								}}
-							>
-								<h3 style={{ marginBottom: "16px" }}>
-									Choose Your Word to Draw
-								</h3>
-								{wordChoiceTimeLeft !== null && (
-									<div
-										style={{
-											marginBottom: "16px",
-											fontSize: "14px",
-											color: wordChoiceTimeLeft <= 5 ? "#f44336" : "#666",
-										}}
-									>
-										Time to choose: <strong>{wordChoiceTimeLeft}</strong>{" "}
-										seconds
-									</div>
-								)}
-								<div
-									style={{
-										display: "flex",
-										gap: "12px",
-										justifyContent: "center",
-										flexWrap: "wrap",
-									}}
-								>
-									{wordChoices.map((wordChoice, index) => (
-										<button
-											key={index}
-											onClick={() => handleWordSelection(wordChoice)}
-											style={{
-												padding: "12px 16px",
-												border: `2px solid ${getDifficultyColor(
-													wordChoice.difficulty
-												)}`,
-												borderRadius: "8px",
-												background: "white",
-												cursor: "pointer",
-												minWidth: "120px",
-												transition: "all 0.2s ease",
-											}}
-											onMouseOver={(e) => {
-												e.target.style.background = getDifficultyColor(
-													wordChoice.difficulty
-												);
-												e.target.style.color = "white";
-											}}
-											onMouseOut={(e) => {
-												e.target.style.background = "white";
-												e.target.style.color = "black";
-											}}
-										>
-											<div style={{ fontWeight: "bold", fontSize: "16px" }}>
-												{wordChoice.word}
-											</div>
-											<div
-												style={{
-													fontSize: "12px",
-													color: getDifficultyColor(wordChoice.difficulty),
-													fontWeight: "bold",
-												}}
-											>
-												{getDifficultyLabel(wordChoice.difficulty)}
-											</div>
-										</button>
-									))}
-								</div>
-								<div
-									style={{
-										marginTop: "12px",
-										fontSize: "12px",
-										color: "#666",
-									}}
-								>
-									If you dont choose, the first word will be automatically
-									selected.
-								</div>
-							</div>
-						)}
-
-					<div>
-						{game.gameStatus === "playing" ? (
-							isDrawer ? (
-								<div>
-									{game.keyword && (
-										<div>
-											You are the drawer. Your word: <b>{game.keyword}</b>
-										</div>
-									)}
-								</div>
-							) : (
-								<div>
-									<div>You are guessing. Try to guess what is being drawn!</div>
-								</div>
-							)
-						) : game.gameStatus === "choosing_word" ? (
-							<div>
-								{isDrawer ? (
-									<div>Choose your word to draw!</div>
+					{/* Status Info Cards */}
+					<div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "8px" }}>
+						<div style={{
+							background: game.gameStatus === "playing" ? "linear-gradient(135deg, #10b981 0%, #059669 100%)" : 
+									 game.gameStatus === "choosing_word" ? "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)" :
+									 game.gameStatus === "betweenRounds" ? "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)" :
+									 "linear-gradient(135deg, #6b7280 0%, #4b5563 100%)",
+							color: "white",
+							padding: "6px 12px",
+							borderRadius: "20px",
+							fontSize: "12px",
+							fontWeight: "500",
+						}}>
+							{game.gameStatus === "playing" ? (
+								isDrawer ? (
+									game.keyword ? `🎨 Drawing: ${game.keyword}` : "🎨 Drawing"
 								) : (
-									<div>
-										The drawer is choosing a word...
-										{wordChoiceTimeLeft !== null && (
-											<span> ({wordChoiceTimeLeft}s)</span>
-										)}
-									</div>
-								)}
-							</div>
-						) : (
-							<div>
-								{game.gameStatus === "betweenRounds" && (
-									<div>
-										Waiting for next round...
-										{nextRoundSeconds !== null && (
-											<span> ({nextRoundSeconds})</span>
-										)}
-									</div>
-								)}
-							</div>
-						)}
-					</div>
-					<div>
-						{game.gameStatus === "playing" &&
-							game.currentRound &&
-							game.maxRounds && (
-								<div>
-									Round {game.currentRound} / {game.maxRounds}
-								</div>
+									"🔍 Guessing"
+								)
+							) : game.gameStatus === "choosing_word" ? (
+								isDrawer ? "🎯 Choose word" : `⏳ Choosing... ${wordChoiceTimeLeft !== null ? `(${wordChoiceTimeLeft}s)` : ""}`
+							) : game.gameStatus === "betweenRounds" ? (
+								`⏸️ Next round ${nextRoundSeconds !== null ? `(${nextRoundSeconds}s)` : ""}`
+							) : (
+								"⏸️ Waiting"
 							)}
-						{secondsLeft !== null && game.gameStatus === "playing" && (
-							<div>
-								Time left: <b>{secondsLeft}</b> seconds
+						</div>
+
+						{/* Round Info */}
+						{game.gameStatus === "playing" && game.currentRound && game.maxRounds && (
+							<div style={{
+								background: "linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)",
+								color: "white",
+								padding: "6px 12px",
+								borderRadius: "20px",
+								fontSize: "12px",
+								fontWeight: "500",
+							}}>
+								📊 Round {game.currentRound}/{game.maxRounds}
 							</div>
 						)}
-					</div>
-					<div>
-						Players: {game.players.map((player) => player.username).join(", ")}{" "}
-						{game.players.length < 2
-							? "(Need at least 2 players to start)"
-							: ""}
+
+						{/* Timer */}
+						{secondsLeft !== null && game.gameStatus === "playing" && (
+							<div style={{
+								background: secondsLeft <= 30 ? "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)" : "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)",
+								color: "white",
+								padding: "6px 12px",
+								borderRadius: "20px",
+								fontSize: "12px",
+								fontWeight: "500",
+							}}>
+								⏰ {secondsLeft}s
+							</div>
+						)}
 					</div>
 
-					{/* Add the enhanced scores display here */}
+					{/* Players */}
+					<div style={{
+						background: "#f8fafc",
+						padding: "8px 12px",
+						borderRadius: "8px",
+						fontSize: "14px",
+						color: "#374151",
+						border: "1px solid #e5e7eb",
+						marginBottom: "8px"
+					}}>
+						<strong>Players:</strong> {game.players ? game.players.map((player) => player.username).join(", ") : "Loading..."}{" "}
+						{game.players && game.players.length < 2 && (
+							<span style={{ color: "#ef4444" }}>(Need at least 2 players)</span>
+						)}
+					</div>
+
+					{/* Round Summary - POKAZUJ PO ZAKOŃCZONEJ RUNDZIE */}
+					{roundSummary && game.gameStatus === "betweenRounds" && (
+						<div style={{
+							marginBottom: "8px",
+							padding: "12px",
+							background: "linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)",
+							borderRadius: "8px",
+							border: "1px solid #10b981",
+						}}>
+							<div style={{ fontWeight: "600", marginBottom: "6px", color: "#065f46" }}>
+								🎯 Round {game.currentRound - 1} Summary:
+							</div>
+							<div style={{ fontSize: "14px", color: "#047857" }}>
+								Word: <strong>{roundSummary.word}</strong> (Difficulty: {roundSummary.difficulty}/5)
+							</div>
+							<div style={{ fontSize: "12px", color: "#047857", marginTop: "4px" }}>
+								{roundSummary.correctGuessers ? roundSummary.correctGuessers.length : 0} players guessed correctly
+							</div>
+						</div>
+					)}
+
+					{/* Scores - ZWIĘKSZ PRZESTRZEŃ */}
 					{Object.keys(scores).length > 0 && (
-						<div style={{ marginTop: 8 }}>
-							<div style={{ fontWeight: "bold", marginBottom: 4 }}>Scores:</div>
-							<div
-								style={{
-									background: "#f5f5f5",
-									padding: "8px",
-									borderRadius: "4px",
-									maxHeight: "120px",
-									overflowY: "auto",
-								}}
-							>
+						<div style={{ marginBottom: "8px" }}>
+							<div style={{ fontWeight: "600", marginBottom: "6px", color: "#374151" }}>
+								🏆 Scores:
+							</div>
+							<div style={{
+								background: "linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)",
+								padding: "8px",
+								borderRadius: "8px",
+								maxHeight: "200px", // ZWIĘKSZONE z 80px
+								overflowY: "auto",
+								border: "1px solid #e5e7eb",
+							}}>
 								{getFormattedScores().map((player, index) => (
 									<div
 										key={player.id}
@@ -1061,58 +1030,44 @@ export default function GamePage() {
 											display: "flex",
 											justifyContent: "space-between",
 											alignItems: "center",
-											padding: "2px 4px",
+											padding: "5px 8px", // ZWIĘKSZONE padding
 											background: player.isLastScorer
-												? "#e8f5e8"
+												? "linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)"
 												: player.isCurrentDrawer
-												? "#fff3cd"
+												? "linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)"
 												: "transparent",
-											borderRadius: "2px",
-											marginBottom: "1px",
-											border: player.isLastScorer
-												? "1px solid #28a745"
-												: "none",
+											borderRadius: "6px",
+											marginBottom: "3px", // ZWIĘKSZONE
+											border: player.isLastScorer ? "1px solid #10b981" : "none",
 										}}
 									>
-										<div
-											style={{
-												display: "flex",
-												alignItems: "center",
-												gap: "4px",
-											}}
-										>
-											<span
-												style={{
-													fontWeight: "bold",
-													minWidth: "16px",
-													fontSize: "12px",
-													color: index < 3 ? "#d4af37" : "#666",
-												}}
-											>
+										<div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+											<span style={{
+												fontWeight: "700",
+												minWidth: "24px",
+												fontSize: "13px", // ZWIĘKSZONE
+												color: index < 3 ? "#f59e0b" : "#6b7280",
+											}}>
 												#{index + 1}
 											</span>
-											<span style={{ fontSize: "14px" }}>
+											<span style={{ fontSize: "15px", fontWeight: "500" }}> {/* ZWIĘKSZONE */}
 												{player.username}
 												{player.isCurrentDrawer && " 🎨"}
 												{player.isLastScorer && " ✨"}
 											</span>
 										</div>
-										<div
-											style={{
-												fontWeight: "bold",
-												color: player.isLastScorer ? "#28a745" : "#333",
-												fontSize: "14px",
-											}}
-										>
+										<div style={{
+											fontWeight: "700",
+											color: player.isLastScorer ? "#10b981" : "#374151",
+											fontSize: "15px", // ZWIĘKSZONE
+										}}>
 											{player.score}
 											{player.isLastScorer && lastScorer && (
-												<span
-													style={{
-														fontSize: "10px",
-														color: "#666",
-														marginLeft: "2px",
-													}}
-												>
+												<span style={{
+													fontSize: "12px", // ZWIĘKSZONE
+													color: "#6b7280",
+													marginLeft: "4px",
+												}}>
 													(+{lastScorer.points})
 												</span>
 											)}
@@ -1123,92 +1078,143 @@ export default function GamePage() {
 						</div>
 					)}
 
+					{/* Queue Info */}
 					{game.drawerChoice === "queue" && game.gameStatus === "playing" && (
-						<div style={{ marginTop: 4, fontSize: "14px" }}>
-							<strong>Drawing Queue:</strong>
+						<div style={{
+							fontSize: "12px",
+							background: "#fef3c7",
+							padding: "6px 8px",
+							borderRadius: "6px",
+							border: "1px solid #f59e0b",
+						}}>
+							<strong>🎨 Drawing Queue:</strong>
 							{drawerQueue.length > 0 ? (
-								<div style={{ marginLeft: 8 }}>
+								<div style={{ marginLeft: 8, marginTop: 2 }}>
 									{drawerQueue.map((queuedPlayer, index) => (
-										<div key={queuedPlayer.socketId} style={{ color: "#666" }}>
+										<div key={queuedPlayer.socketId} style={{ color: "#92400e" }}>
 											{index + 1}. {queuedPlayer.username}
 											{queuedPlayer.socketId === currentSocketId && " (You)"}
 										</div>
 									))}
 								</div>
 							) : (
-								<span style={{ color: "#999", marginLeft: 8 }}>
-									No one in queue
-								</span>
+								<span style={{ color: "#92400e", marginLeft: 8 }}>No one in queue</span>
 							)}
-							<div style={{ fontSize: "12px", color: "#666", marginTop: 2 }}>
+							<div style={{ color: "#92400e", marginTop: 2 }}>
 								Rounds remaining: {getRoundsLeft()}
 							</div>
 						</div>
 					)}
 				</div>
+
 				{/* Drawing Tools */}
 				{isDrawer && game.gameStatus === "playing" && (
-					<div
-						style={{
-							display: "flex",
-							gap: 8,
-							marginBottom: 8,
-							flexWrap: "wrap",
-						}}
-					>
-						<button onClick={handlePenClick} disabled={!eraseMode || !isDrawer}>
-							Pen
+					<div style={{
+						display: "flex",
+						gap: "8px",
+						marginBottom: "12px",
+						flexWrap: "wrap",
+						padding: "12px",
+						background: "linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)",
+						borderRadius: "12px",
+						border: "1px solid #e5e7eb",
+						flex: "0 0 auto",
+					}}>
+						<button onClick={handlePenClick} disabled={!eraseMode || !isDrawer} style={{
+							background: !eraseMode ? "linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)" : "#e5e7eb",
+							color: !eraseMode ? "white" : "#6b7280",
+							border: "none",
+							padding: "6px 12px",
+							borderRadius: "6px",
+							fontSize: "12px",
+							fontWeight: "500",
+							cursor: "pointer",
+						}}>
+							✏️ Pen
 						</button>
-						<button
-							onClick={handleEraserClick}
-							disabled={eraseMode || !isDrawer}
-						>
-							Eraser
+						<button onClick={handleEraserClick} disabled={eraseMode || !isDrawer} style={{
+							background: eraseMode ? "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)" : "#e5e7eb",
+							color: eraseMode ? "white" : "#6b7280",
+							border: "none",
+							padding: "6px 12px",
+							borderRadius: "6px",
+							fontSize: "12px",
+							fontWeight: "500",
+							cursor: "pointer",
+						}}>
+							🧹 Eraser
 						</button>
-						<label>
-							Color:
+						<label style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "12px", fontWeight: "500" }}>
+							🎨 Color:
 							<input
 								type="color"
 								value={strokeColor}
 								onChange={handleStrokeColorChange}
 								disabled={!isDrawer}
+								style={{ width: "30px", height: "30px", borderRadius: "4px", border: "1px solid #d1d5db" }}
 							/>
 						</label>
-						<label>
-							Size:
+						<label style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "12px", fontWeight: "500" }}>
+							📏 Size:
 							<input
 								type="range"
 								min="1"
 								max="50"
 								value={eraseMode ? eraserWidth : strokeWidth}
-								onChange={
-									eraseMode ? handleEraserWidthChange : handleStrokeWidthChange
-								}
+								onChange={eraseMode ? handleEraserWidthChange : handleStrokeWidthChange}
 								disabled={!isDrawer}
+								style={{ width: "60px" }}
 							/>
 						</label>
-						<button onClick={handleUndoClick} disabled={!isDrawer}>
-							Undo
+						<button onClick={handleUndoClick} disabled={!isDrawer} style={{
+							background: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)",
+							color: "white",
+							border: "none",
+							padding: "6px 12px",
+							borderRadius: "6px",
+							fontSize: "12px",
+							fontWeight: "500",
+							cursor: "pointer",
+						}}>
+							↶ Undo
 						</button>
-						<button onClick={handleRedoClick} disabled={!isDrawer}>
-							Redo
+						<button onClick={handleRedoClick} disabled={!isDrawer} style={{
+							background: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)",
+							color: "white",
+							border: "none",
+							padding: "6px 12px",
+							borderRadius: "6px",
+							fontSize: "12px",
+							fontWeight: "500",
+							cursor: "pointer",
+						}}>
+							↷ Redo
 						</button>
-						<button onClick={handleClearClick} disabled={!isDrawer}>
-							Clear
+						<button onClick={handleClearClick} disabled={!isDrawer} style={{
+							background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
+							color: "white",
+							border: "none",
+							padding: "6px 12px",
+							borderRadius: "6px",
+							fontSize: "12px",
+							fontWeight: "500",
+							cursor: "pointer",
+						}}>
+							🗑️ Clear
 						</button>
 					</div>
 				)}
-				{/* Canvas */}
-				<div
-					style={{
-						flex: 1,
-						minHeight: 0,
-						position: "relative",
-						border: "1px solid #ddd",
-						borderRadius: 4,
-						overflow: "hidden",
-					}}
-				>
+
+				{/* Canvas - POPRAWIONE FLEXBOX */}
+				<div style={{
+					flex: 1,
+					minHeight: 0,
+					position: "relative",
+					border: "3px solid #e5e7eb",
+					borderRadius: "12px",
+					overflow: "hidden",
+					boxShadow: "inset 0 2px 8px rgba(0, 0, 0, 0.1)",
+				}}>
 					<ReactSketchCanvas
 						ref={canvasRef}
 						strokeWidth={eraseMode ? eraserWidth : strokeWidth}
@@ -1219,54 +1225,155 @@ export default function GamePage() {
 						width="100%"
 						readOnly={effectiveReadOnly}
 						onChange={handleCanvasChange}
-						style={{ border: "none", width: "100%", height: "100%" }}
+						style={{ 
+							border: "none", 
+							width: "100%", 
+							height: "100%",
+							display: "block"
+						}}
 					/>
 					{(!isDrawer || game.gameStatus !== "playing") && (
-						<div
-							style={{
-								position: "absolute",
-								inset: 0,
-								zIndex: 10,
-								cursor: "not-allowed",
-							}}
-						/>
+						<div style={{
+							position: "absolute",
+							inset: 0,
+							zIndex: 10,
+							cursor: "not-allowed",
+						}} />
 					)}
 				</div>
+
+				{/* Word Selection Modal - bez zmian */}
+				{isDrawer && game.gameStatus === "choosing_word" && wordChoices.length > 0 && (
+					<div style={{
+						position: "fixed",
+						top: "50%",
+						left: "50%",
+						transform: "translate(-50%, -50%)",
+						background: "white",
+						border: "2px solid #333",
+						borderRadius: "10px",
+						padding: "20px",
+						boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
+						zIndex: 1000,
+						textAlign: "center",
+						minWidth: "400px",
+					}}>
+						<h3 style={{ marginBottom: "16px" }}>Choose Your Word to Draw</h3>
+						{wordChoiceTimeLeft !== null && (
+							<div style={{
+								marginBottom: "16px",
+								fontSize: "14px",
+								color: wordChoiceTimeLeft <= 5 ? "#f44336" : "#666",
+							}}>
+								Time to choose: <strong>{wordChoiceTimeLeft}</strong> seconds
+							</div>
+						)}
+						<div style={{
+							display: "flex",
+							gap: "12px",
+							justifyContent: "center",
+							flexWrap: "wrap",
+						}}>
+							{wordChoices.map((wordChoice, index) => (
+								<button
+									key={index}
+									onClick={() => handleWordSelection(wordChoice)}
+									style={{
+										padding: "12px 16px",
+										border: `2px solid ${getDifficultyColor(wordChoice.difficulty)}`,
+										borderRadius: "8px",
+										background: "white",
+										cursor: "pointer",
+										minWidth: "120px",
+										transition: "all 0.2s ease",
+									}}
+									onMouseOver={(e) => {
+										e.target.style.background = getDifficultyColor(wordChoice.difficulty);
+										e.target.style.color = "white";
+									}}
+									onMouseOut={(e) => {
+										e.target.style.background = "white";
+										e.target.style.color = "black";
+									}}
+								>
+									<div style={{ fontWeight: "bold", fontSize: "16px" }}>
+										{wordChoice.word}
+									</div>
+									<div style={{
+										fontSize: "12px",
+										color: getDifficultyColor(wordChoice.difficulty),
+										fontWeight: "bold",
+									}}>
+										{getDifficultyLabel(wordChoice.difficulty)}
+									</div>
+								</button>
+							))}
+						</div>
+						<div style={{
+							marginTop: "12px",
+							fontSize: "12px",
+							color: "#666",
+						}}>
+							If you dont choose, the first word will be automatically selected.
+						</div>
+					</div>
+				)}
 			</div>
-			{/* Right: Chat Area (1/3) */}
-			<div
-				style={{
-					flex: 1,
-					display: "flex",
-					flexDirection: "column",
-					background: "#fff",
-					border: "1px solid #ccc",
-					borderRadius: 4,
-					padding: 8,
-					minWidth: 0,
-				}}
-			>
-				<div style={{ marginBottom: 8 }}>Chat & Guesses</div>
-				<div style={{ flex: 1, overflowY: "auto", marginBottom: 8 }}>
+
+			{/* Right: Chat Area (1/3) - bez zmian */}
+			<div style={{
+				flex: 1,
+				display: "flex",
+				flexDirection: "column",
+				background: "#ffffff",
+				border: "2px solid #e5e7eb",
+				borderRadius: "16px",
+				padding: "16px",
+				minWidth: 0,
+				boxShadow: "0 8px 32px rgba(0, 0, 0, 0.1)",
+			}}>
+				<div style={{ 
+					marginBottom: "12px", 
+					fontWeight: "600", 
+					fontSize: "18px", 
+					color: "#374151",
+					textAlign: "center",
+					padding: "8px",
+					background: "linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)",
+					borderRadius: "8px",
+				}}>
+					💬 Chat & Guesses
+				</div>
+				<div style={{ 
+					flex: 1, 
+					overflowY: "auto", 
+					marginBottom: "12px",
+					padding: "8px",
+					background: "#f8fafc",
+					borderRadius: "8px",
+					border: "1px solid #e5e7eb",
+				}}>
 					{chatMessages.map((msg, idx) => (
 						<div
 							key={idx}
 							style={{
-								marginBottom: 4,
-								padding: 4,
-								borderRadius: 4,
+								marginBottom: "6px",
+								padding: "6px 8px",
+								borderRadius: "8px",
 								background:
 									msg.user === "System"
 										? msg.type === "keyword_event"
-											? "#e6fffa"
-											: "#eee"
+											? "linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)"
+											: "linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)"
 										: msg.user === loggedInUser?.username
-										? "#e0ffe0"
-										: "#f8f8f8",
-								fontWeight: msg.user === "System" ? "bold" : "normal",
+										? "linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)"
+										: "#ffffff",
+								fontWeight: msg.user === "System" ? "600" : "normal",
+								border: "1px solid #e5e7eb",
+								fontSize: "14px",
 							}}
 						>
-							<span>
+							<span style={{ fontWeight: "600" }}>
 								{msg.user === loggedInUser?.username && msg.user !== "System"
 									? "You"
 									: msg.user}
@@ -1278,9 +1385,9 @@ export default function GamePage() {
 				</div>
 				<form
 					onSubmit={handleSendChatMessage}
-					style={{ display: "flex", flexDirection: "column", gap: 4 }}
+					style={{ display: "flex", flexDirection: "column", gap: "8px" }}
 				>
-					<div style={{ display: "flex", gap: 4 }}>
+					<div style={{ display: "flex", gap: "8px" }}>
 						<input
 							type="text"
 							value={chatInput}
@@ -1295,63 +1402,73 @@ export default function GamePage() {
 							disabled={isDrawer || hasGuessedCorrectly}
 							style={{
 								flex: 1,
-								padding: 6,
-								borderRadius: 4,
-								border: "1px solid #ccc",
+								padding: "10px",
+								borderRadius: "8px",
+								border: "2px solid #e5e7eb",
+								fontSize: "14px",
+								outline: "none",
 							}}
 						/>
-						<button type="submit" disabled={isDrawer}>
+						<button type="submit" disabled={isDrawer} style={{
+							background: "linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)",
+							color: "white",
+							border: "none",
+							padding: "10px 16px",
+							borderRadius: "8px",
+							fontSize: "14px",
+							fontWeight: "500",
+							cursor: "pointer",
+							boxShadow: "0 2px 8px rgba(59, 130, 246, 0.3)",
+						}}>
 							Send
 						</button>
 					</div>
 
-					{/* Drawer Queue Button - only show if drawerChoice is queue and game is playing */}
-					{game.drawerChoice === "queue" &&
-						game.gameStatus === "playing" &&
-						!isDrawer &&
-						getRoundsLeft() > 0 && (
-							<div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-								<button
-									type="button"
-									onClick={handleJoinDrawerQueue}
-									style={{
-										padding: "6px 12px",
-										borderRadius: 4,
-										border: "1px solid #ccc",
-										background: isInQueue ? "#ffebee" : "#e3f2fd",
-										color: isInQueue ? "#c62828" : "#1976d2",
-										fontSize: "14px",
-										cursor: "pointer",
-									}}
-									disabled={getRoundsLeft() === 0}
-								>
-									{isInQueue ? "Leave Drawing Queue" : "Join Drawing Queue"}
-								</button>
-								{queueMessage && (
-									<div
-										style={{
-											fontSize: "12px",
-											color: "#666",
-											textAlign: "center",
-											padding: "2px",
-										}}
-									>
-										{queueMessage}
-									</div>
-								)}
-								{getRoundsLeft() === 0 && (
-									<div
-										style={{
-											fontSize: "12px",
-											color: "#999",
-											textAlign: "center",
-										}}
-									>
-										No more rounds left
-									</div>
-								)}
-							</div>
-						)}
+					{/* Drawer Queue Button */}
+					{game.drawerChoice === "queue" && game.gameStatus === "playing" && !isDrawer && getRoundsLeft() > 0 && (
+						<div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+							<button
+								type="button"
+								onClick={handleJoinDrawerQueue}
+								style={{
+									padding: "8px 16px",
+									borderRadius: "8px",
+									border: "2px solid #e5e7eb",
+									background: isInQueue 
+										? "linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)" 
+										: "linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)",
+									color: isInQueue ? "#dc2626" : "#1d4ed8",
+									fontSize: "14px",
+									fontWeight: "500",
+									cursor: "pointer",
+								}}
+								disabled={getRoundsLeft() === 0}
+							>
+								{isInQueue ? "🚪 Leave Drawing Queue" : "🎨 Join Drawing Queue"}
+							</button>
+							{queueMessage && (
+								<div style={{
+									fontSize: "12px",
+									color: "#059669",
+									textAlign: "center",
+									padding: "4px",
+									background: "#ecfdf5",
+									borderRadius: "4px",
+								}}>
+									{queueMessage}
+								</div>
+							)}
+							{getRoundsLeft() === 0 && (
+								<div style={{
+									fontSize: "12px",
+									color: "#6b7280",
+									textAlign: "center",
+								}}>
+									No more rounds left
+								</div>
+							)}
+						</div>
+					)}
 				</form>
 			</div>
 			{gameEndData && (
