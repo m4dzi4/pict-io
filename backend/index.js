@@ -7,13 +7,28 @@ const bcrypt = require("bcryptjs"); // Import bcryptjs
 const jwt = require("jsonwebtoken"); // Import jsonwebtoken
 
 const app = express();
+app.use(express.json());
+
+const corsOrigins = [
+	process.env.FRONTEND_URL,
+	process.env.FRONTEND_LOCAL_URL || "http://localhost:3000",
+];
+
 app.use(
 	cors({
-		origin: process.env.FRONTEND_URL,
+		origin: function (origin, callback) {
+			// Allow requests with no origin (like mobile apps, curl requests)
+			if (!origin) return callback(null, true);
+
+			if (corsOrigins.indexOf(origin) !== -1 || !origin) {
+				callback(null, true);
+			} else {
+				callback(new Error("Not allowed by CORS"));
+			}
+		},
 		credentials: true,
 	})
 );
-app.use(express.json());
 
 const prisma = new PrismaClient({
 	datasources: {
@@ -25,8 +40,9 @@ const prisma = new PrismaClient({
 const server = http.createServer(app);
 const io = new Server(server, {
 	cors: {
-		origin: process.env.FRONTEND_URL, // frontend origin
+		origin: corsOrigins,
 		methods: ["GET", "POST"],
+		credentials: true,
 	},
 });
 
