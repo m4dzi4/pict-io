@@ -46,10 +46,6 @@ const io = new Server(server, {
 	},
 });
 
-// TODO : Add logic for the points for guessers and drawers.
-// TODO : Add frontend beuty
-// TODO : Dockerize the app
-
 const JWT_SECRET = process.env.JWT_SECRET;
 // TODO: should be handled as a call to the database
 //const KEYWORDS_LIST = ["apple", "banana", "car", "house", "tree", "sun", "moon", "star", "book", "clock", "river", "mountain", "bridge", "flower", "fish"];

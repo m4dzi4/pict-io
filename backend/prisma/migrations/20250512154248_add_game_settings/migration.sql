@@ -1,0 +1,6 @@
+-- AlterTable
+ALTER TABLE "Room" ADD COLUMN     "gameMode" TEXT NOT NULL DEFAULT 'rounds',
+ADD COLUMN     "maxRounds" INTEGER NOT NULL DEFAULT 5,
+ADD COLUMN     "pointsToWin" INTEGER NOT NULL DEFAULT 3,
+ADD COLUMN     "roundDuration" INTEGER NOT NULL DEFAULT 60,
+ADD COLUMN     "status" TEXT NOT NULL DEFAULT 'waiting';

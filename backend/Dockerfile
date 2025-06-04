@@ -4,23 +4,17 @@ WORKDIR /app
 
 # Copy package files and install dependencies
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 
-# Copy prisma schema
+# Copy prisma schema and generate client
 COPY prisma ./prisma/
-
-# Generate Prisma client
 RUN npx prisma generate
 
 # Copy the rest of the application
 COPY . .
 
-# Set environment variables
-ENV NODE_ENV=production
-ENV FRONTEND_URL=http://frontend:3000
-
 # Expose the port
 EXPOSE 4000
 
-# Start the app with a script that ensures the database is ready
+# Start the app
 CMD ["node", "index.js"]
