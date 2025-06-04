@@ -11,9 +11,10 @@
   max-width: 1200px;
   margin: 0 auto;
   padding: 0 20px;
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  display: flex; /* ZMIANA: z grid na flex */
+  justify-content: space-between; /* ZMIANA: rozprowadza elementy */
   align-items: center;
+  position: relative; /* DODAJ */
 }
 
 .loadingContainer {
@@ -26,12 +27,16 @@
 }
 
 .leftSide {
-  /* Empty div for balance */
+  /* Empty div for balance - można usunąć */
+  flex: 0; /* DODAJ: nie rozciąga się */
 }
 
 .logoContainer {
-  justify-self: center;
+  /* USUŃ: justify-self: center; */
   text-align: center;
+  flex: 1; /* DODAJ: zajmuje środek */
+  display: flex; /* DODAJ */
+  justify-content: center; /* DODAJ */
 }
 
 .logo {
@@ -48,10 +53,16 @@
 }
 
 .authSection {
-  justify-self: end;
+  /* USUŃ: justify-self: end; */
   display: flex;
   gap: 12px;
   align-items: center;
+  margin-left: auto; /* DODAJ: przesuwa jak najbardziej w prawo */
+  flex: 0; /* DODAJ: nie rozciąga się */
+  position: absolute; /* DODAJ: absolutne pozycjonowanie */
+  right: 20px; /* DODAJ: dokładnie 20px od prawej (jak padding kontenera) */
+  top: 50%; /* DODAJ */
+  transform: translateY(-50%); /* DODAJ: wyśrodkowanie w pionie */
 }
 
 .welcomeText {
@@ -110,20 +121,28 @@
 /* Responsive design */
 @media (max-width: 768px) {
   .container {
-    grid-template-columns: 1fr;
+    /* ZMIANA: zachowaj flex layout */
+    flex-direction: column; /* DODAJ: pionowe ułożenie na mobile */
     gap: 10px;
     text-align: center;
   }
   
   .logoContainer {
-    justify-self: center;
+    /* justify-self już nie istnieje */
+    order: 1; /* DODAJ: logo pierwsze */
   }
   
   .authSection {
-    justify-self: center;
+    /* justify-self już nie istnieje */
+    margin-left: 0; /* RESETUJ na mobile */
+    order: 2; /* DODAJ: przyciski drugie */
   }
   
   .logo {
     font-size: 2rem;
+  }
+  
+  .leftSide {
+    display: none; /* DODAJ: ukryj na mobile */
   }
 }
