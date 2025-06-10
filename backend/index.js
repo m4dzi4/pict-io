@@ -660,7 +660,6 @@ function calculateDrawerPoints(wordDifficulty, totalPlayers, correctGuessers) {
 }
 
 function getDrawer(roomId) {
-	// TODO : What if the player is no longer in the game - check for validity.
 	const game = games[roomId];
 	const randomIndex = Math.floor(Math.random() * game.players.length);
 	if (game.currentRound === 1) {
@@ -670,11 +669,27 @@ function getDrawer(roomId) {
 	} else {
 		if (game.drawerChoice === "queue") {
 			// The player that is at the start of the queue is selected as the drawer
+			if (game.drawerQueue.length === 0) return game.players[randomIndex].id;
+			// Clean the queue to remove players who have left
 			game.drawerQueue = game.drawerQueue.filter((queuedPlayer) =>
 				game.players.some((player) => player.id === queuedPlayer.socketId)
 			);
-			if (game.drawerQueue.length === 0) return game.players[randomIndex].id;
+
+			// If queue is still empty after cleaning, select random and notify
+			if (game.drawerQueue.length === 0) {
+				io.to(roomId).emit("new_chat_message", {
+					user: "System",
+					text: "No players in the drawer queue. A random player has been selected to draw.",
+					type: "system",
+				});
+				return game.players[randomIndex].id;
+			}
+
+			game.drawerQueue = game.drawerQueue.filter((queuedPlayer) =>
+				game.players.some((player) => player.id === queuedPlayer.socketId)
+			);
 			const nextDrawer = game.drawerQueue.shift(); // Remove the first player from the queue
+
 			// Broadcast updated queue after removing the drawer
 			io.to(roomId).emit("drawer_queue_updated", {
 				drawerQueue: game.drawerQueue.map((p) => ({
@@ -915,7 +930,6 @@ const authenticateToken = (req, res, next) => {
 app.post("/api/rooms/create", authenticateToken, async (req, res) => {
 	const { settings } = req.body;
 	creatorUsername = req.user.username; // From JWT
-	// TODO : Add connection between users and rooms in DB
 	creatorDbId = req.user.userId; // From JWT
 
 	try {
@@ -997,13 +1011,10 @@ app.get("/api/rooms/validate/:roomId", async (req, res) => {
 		// Check if room is in memory (i.e., active)
 		const game = games[roomId];
 		if (!game) {
-			// If not in memory, but in DB, it might be an old room or needs re-initialization
-			// For simplicity, let's assume if not in `games`, it's not actively joinable for now
-			// Or, you could re-initialize it here if desired.
 			console.warn(
 				`Room ${roomId} found in DB but not in active games memory.`
 			);
-			// Re-initialize if needed, or treat as not joinable
+			// Treat as not joinable
 			return res
 				.status(404)
 				.json({ success: false, message: "Room is not currently active." });
@@ -1289,15 +1300,23 @@ io.on("connection", (socket) => {
 
 		// 5. Check if all guessers have guessed correctly - FIXED logic
 		const allGuessers = game.players.filter((p) => p.id !== game.drawerId);
-		const correctGuessers = game.round_history[game.currentRound].correct_guesses;
+		const correctGuessers =
+			game.round_history[game.currentRound].correct_guesses;
 
-		console.log(`All guessers: ${allGuessers.map((p) => p.username).join(", ")}`);
-		console.log(`Correct guessers objects:`, correctGuessers.map((g) => g.username));
+		console.log(
+			`All guessers: ${allGuessers.map((p) => p.username).join(", ")}`
+		);
+		console.log(
+			`Correct guessers objects:`,
+			correctGuessers.map((g) => g.username)
+		);
 		console.log(`drawerId: ${game.drawerId}`);
 
 		// Use the centralized checkIfAllGuessed function instead of duplicate logic
 		if (checkIfAllGuessed(roomId)) {
-			console.log(`All players in room ${roomId} guessed the word. Ending round early.`);
+			console.log(
+				`All players in room ${roomId} guessed the word. Ending round early.`
+			);
 			// Award drawer points before ending round
 			awardDrawerPoints(roomId);
 			// End round early
@@ -1477,6 +1496,23 @@ io.on("connection", (socket) => {
 
 		if (playerIndex !== -1) {
 			const removedPlayer = game.players.splice(playerIndex, 1)[0];
+
+			// Remove player from drawer queue if they're in it
+			if (game.drawerQueue) {
+				const queueIndex = game.drawerQueue.findIndex(
+					(queuedPlayer) => queuedPlayer.socketId === socket.id
+				);
+				if (queueIndex !== -1) {
+					game.drawerQueue.splice(queueIndex, 1);
+					// Broadcast updated queue
+					io.to(roomId).emit("drawer_queue_updated", {
+						drawerQueue: game.drawerQueue.map((p) => ({
+							username: p.username,
+							socketId: p.socketId,
+						})),
+					});
+				}
+			}
 
 			// Powiadom pozostałych graczy (bez zmian)
 			io.to(roomId).emit("new_chat_message", {
@@ -1658,6 +1694,23 @@ io.on("connection", (socket) => {
 			// Usuń gracza z pokoju
 			const removedPlayer = game.players[playerIndex];
 			game.players.splice(playerIndex, 1);
+
+			// Remove player from drawer queue if they're in it
+			if (game.drawerQueue) {
+				const queueIndex = game.drawerQueue.findIndex(
+					(queuedPlayer) => queuedPlayer.socketId === socket.id
+				);
+				if (queueIndex !== -1) {
+					game.drawerQueue.splice(queueIndex, 1);
+					// Broadcast updated queue
+					io.to(roomId).emit("drawer_queue_updated", {
+						drawerQueue: game.drawerQueue.map((p) => ({
+							username: p.username,
+							socketId: p.socketId,
+						})),
+					});
+				}
+			}
 
 			// Opuść pokój Socket.IO
 			socket.leave(roomId);
@@ -1887,7 +1940,6 @@ app.post("/admin/disconnect-all", (req, res) => {
 	// Dodaj obsługę zdarzenia destroy_room
 });
 // curl -X POST http://localhost:4000/admin/disconnect-all
-
 
 const PORT = 4000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));

@@ -510,7 +510,7 @@ export default function GamePage() {
 			alert("Please enter an access code.");
 		} else {
 			alert(
-				"Not connected to server or room ID miss  g. Please wait or refresh."
+				"Not connected to server or room ID missing. Please wait or refresh."
 			);
 		}
 	};
